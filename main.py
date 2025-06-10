@@ -5,10 +5,16 @@ sys.path.append(f"{dirname}/modules")
 
 import discord, asyncio, time, json
 
-# modules
-import test
-
 client = discord.Bot(chunk_guilds_at_startup=False)
+
+# cogs
+cogList = [
+	'testing'
+]
+
+for cog in cogList:
+	client.load_extension(f'cogs.{cog}')
+
 owners = []
 doneStartup = False
 configData = None
