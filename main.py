@@ -1,4 +1,6 @@
 import sys, os
+#import logging
+#logging.basicConfig(level=logging.DEBUG)
 
 dirname = os.path.dirname(sys.argv[0]) or '.'
 sys.path.append(f"{dirname}/modules")
@@ -8,12 +10,18 @@ import discord, asyncio, time, json
 client = discord.Bot(chunk_guilds_at_startup=False)
 
 # cogs
+'''
 cogList = [
 	'testing'
 ]
 
 for cog in cogList:
 	client.load_extension(f'cogs.{cog}')
+	print(f'Cog loaded: {cog}')
+'''
+@client.slash_command(name="flop",Description="Fellow Bar")
+async def flop(ctx):
+	await ctx.respond("This works maybe?")
 
 owners = []
 doneStartup = False
