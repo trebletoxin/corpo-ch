@@ -140,7 +140,7 @@ class Path():
 		embed.add_field(name="Instructions", value="Search Results from Encore\nSet the CHOpt settings then hit submit to pick the chart to use\nOrder is NUM: Song - Artist - Album - Charter", inline=False)
 		chartListing = ""
 
-		if self.numCharts > 0
+		if self.numCharts > 0:
 			for i, chart in enumerate(self.searchData):
 				chartListing += f"{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}\n"
 		else:
