@@ -17,7 +17,14 @@ class CHUtils():
 		self.encore['dl'] = 'https://files.enchor.us/'
 
 	def CHOpt(self, sngUuid, opts) -> str:
-		inChart = f'{self.sngCliOutput}/{sngUuid}/notes.chart'
+		if os.path.isfile(f'{self.sngCliOutput}/{sngUuid}/notes.chart'):
+			inChart = f'{self.sngCliOutput}/{sngUuid}/notes.chart'
+		elif os.path.isfile(f'{self.sngCliOutput}/{sngUuid}/notes.mid'):
+			inChart = f'{self.sngCliOutput}/{sngUuid}/notes.mid'
+		else:
+			print(f"Can't find chart file for song {sngUuid}")
+			return None
+
 		outPng = f'./CHOpt/output/{sngUuid}.png'
 		choptCall = f"{self.CHOptPath} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {inChart} -i guitar -d expert -o {outPng}"
 
@@ -35,12 +42,8 @@ class CHUtils():
 		for i in query:
 			d[i] = { 'value' : query[i], 'exact' : True, 'exclude' : False }
 
-		print(f"Encore Sent Query is: {d}")
 		resp = requests.post(self.encore['adv'], data = json.dumps(d), headers = {"Content-Type":"application/json"})
-
-		print(resp.json())
 		retData = []
-		#d = resp.json()['data'][0]
 		atts = ['name','artist','md5','charter','album','hasVideoBackground']
 		for i, v in enumerate(resp.json()['data']):
 			if i > 10:
@@ -53,7 +56,6 @@ class CHUtils():
 
 			retData.append(s)
 
-		print(f"SEARCH RETDATA: {retData}")
 		return retData
 
 	def encoreDownload(self, theChart: dict) -> str:

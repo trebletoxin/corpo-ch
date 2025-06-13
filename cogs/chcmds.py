@@ -140,8 +140,11 @@ class Path():
 		embed.add_field(name="Instructions", value="Search Results from Encore\nSet the CHOpt settings then hit submit to pick the chart to use\nOrder is NUM: Song - Artist - Album - Charter", inline=False)
 		chartListing = ""
 
-		for i, chart in enumerate(self.searchData):
-			chartListing += f"{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}\n"
+		if self.numCharts > 0
+			for i, chart in enumerate(self.searchData):
+				chartListing += f"{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}\n"
+		else:
+			chartListing = "No results found for search"
 			
 		embed.add_field(name="Search Results", value=chartListing, inline=False)
 		embed.add_field(name="Current CHOpt Options", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%")
@@ -168,14 +171,13 @@ class PathView(discord.ui.View):
 			super().__init__()
 			self.path = path
 
-			if not doneSearch:
+			if not doneSearch or self.path.numCharts < 1:
 				self.get_item('submit').disabled = True
 				self.get_item('chopts').disabled = True
 
 		@discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
 		async def cancelBtn(self, button, interaction: discord.Interaction):
 			await interaction.response.edit_message(content="Closing", embed=None, view=None, delete_after=1)
-			await self.ctx.interaction.delete_original_response()
 			self.stop()
 
 		@discord.ui.button(label='Search', style=discord.ButtonStyle.secondary)
@@ -209,7 +211,7 @@ class CHCmds(commands.Cog):
 		self.bot = bot
 
 	ch = discord.SlashCommandGroup('ch','CloneHero tools')
-	@ch.command(name='path',description='Generate a path for a given chart on Chorus')
+	@ch.command(name='path',description='Generate a path for a given chart on Chorus', integration_types={discord.IntegrationType.guild_install, discord.IntegrationType.user_install})
 	async def path(self, ctx):
 		path = Path(ctx)
 		await path.show()
