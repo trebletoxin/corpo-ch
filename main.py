@@ -12,7 +12,7 @@ client = discord.Bot(chunk_guilds_at_startup=False)
 # cogs
 cogList = [
 	'fun',
-	'ch'
+	'chcmds'
 ]
 
 for cog in cogList:
@@ -66,6 +66,7 @@ async def on_ready():
 	else:
 		print("RECONNECT TO DISCORD")
 
+	print('------Done with Startup------')
 	doneStartup = True
 
 loadConfig()
