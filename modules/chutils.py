@@ -76,7 +76,7 @@ class CHUtils():
 		with open(filePath,'wb') as file:
 			file.write(resp.content)
 
-		return sngUuid, url
+		return sngUuid
 
 	def sngDecode(self, sngUuid) -> bool:
 		os.makedirs(f'{self.sngCliOutput}/{sngUuid}')

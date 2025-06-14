@@ -105,7 +105,7 @@ class Path():
 			await self.ctx.interaction.delete_original_response()
 
 	async def showResult(self, interaction):
-		sngUuid, url = self.chUtils.encoreDownload(self.searchData[self.selection - 1])
+		sngUuid = self.chUtils.encoreDownload(self.searchData[self.selection - 1])
 
 		if not self.chUtils.sngDecode(sngUuid):
 			await interaction.response.send_message('Path generation died on sng file decode. SNG UUID: {sngUuid}', ephemeral=True)
@@ -118,7 +118,7 @@ class Path():
 			await self.hide()
 			return
 
-		embed, thumbnail = self.genResultEmbed(outPng, url)
+		embed, thumbnail = self.genResultEmbed(outPng)
 		await interaction.response.send_message(embed=embed, file=thumbnail, view=None, ephemeral=False)
 		await self.hide()
 		self.cleanup(sngUuid, outPng)
@@ -152,15 +152,16 @@ class Path():
 
 		return embed
 
-	def genResultEmbed(self, outPng, url) -> discord.Embed:
+	def genResultEmbed(self, outPng) -> discord.Embed:
 		theSong = self.searchData[self.selection - 1]
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "/ch path run result"
+		embed.set_author(name=self.ctx.user.display_name, icon_url=self.ctx.user.avatar.url)
 		fp = discord.File(outPng, filename="path.png", description="CHOpt path for...")
 		embed.set_thumbnail(url=f"attachment://path.png")
 		embed.add_field(name="CHOpt Path For", value=f"{theSong["name"]} - {theSong["artist"]} - {theSong["album"]} - {theSong["charter"]}", inline=False)
 		embed.add_field(name="CHOpt Options Used", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%", inline=False)
-		embed.set_footer(text=f"[Download for .sng (only works with CH 1.1)]({url})]")
+
 		return embed, fp
 
 	def cleanup(self, sngUuid, outPng):
