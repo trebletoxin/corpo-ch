@@ -118,8 +118,8 @@ class Path():
 			await self.hide()
 			return
 
-		embed, thumbnail = self.genResultEmbed(outPng)
-		await interaction.response.send_message(embed=embed, file=thumbnail, view=None, ephemeral=False)
+		embed = self.genResultEmbed(sngUuid)
+		await interaction.response.send_message(embed=embed, view=None, ephemeral=False)
 		await self.hide()
 		self.cleanup(sngUuid, outPng)
 
@@ -153,22 +153,24 @@ class Path():
 
 		return embed
 
-	def genResultEmbed(self, outPng) -> discord.Embed:
+	def genResultEmbed(self, sngUuid) -> discord.Embed:
+		print(f"Selection in embed is {self.selection - 1}")
 		theSong = self.searchData[self.selection - 1]
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "/ch path run result"
 		embed.set_author(name=self.ctx.user.display_name, icon_url=self.ctx.user.avatar.url)
-		fp = discord.File(outPng, filename="path.png", description="CHOpt path for...")
-		embed.set_thumbnail(url=f"attachment://path.png")
+		#fp = discord.File(outPng, filename="path.png", description="CHOpt path for...")
+		url = f"https://che.crmea.de/{sngUuid}.png"
+		embed.set_thumbnail(url=url)
 		embed.add_field(name="CHOpt Path For", value=f"{theSong["name"]} - {theSong["artist"]} - {theSong["album"]} - {theSong["charter"]}", inline=False)
 		embed.add_field(name="CHOpt Options Used", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%", inline=False)
-
-		return embed, fp
+		embed.add_field(name="Image Link", value=f"[Link to Image]({url})")
+		return embed
 
 	def cleanup(self, sngUuid, outPng):
 		shutil.rmtree(f'{self.chUtils.sngCliInput}/{sngUuid}')
 		shutil.rmtree(f'{self.chUtils.sngCliOutput}/{sngUuid}')
-		os.remove(outPng)
+		#os.remove(outPng)
 
 class PathView(discord.ui.View):
 	def __init__(self, path, doneSearch):
@@ -208,7 +210,7 @@ class PathView(discord.ui.View):
 				self.path.selection = submitModal.selection
 
 			return
-		else:
+		elif self.path.numCharts == 1:
 			self.path.selection = 1
 
 		await self.path.showResult(interaction)
