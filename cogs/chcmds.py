@@ -11,7 +11,7 @@ class CHOptModal(Modal):
 		self.choptOpts = None
 		self.add_item(InputText(label="Early Whammy %", style=discord.InputTextStyle.short, required=True, placeholder='0-100'))
 		self.add_item(InputText(label="Squeeze %", style=discord.InputTextStyle.short, required=True, placeholder='0-100'))
-		self.add_item(InputText(label="Song Speed", style=discord.InputTextStyle.short, required=True, placeholder='10-250'))
+		self.add_item(InputText(label="Song Speed (10-250)", style=discord.InputTextStyle.short, required=True, value=100))
 
 	async def callback(self, interaction: discord.Interaction):
 		retData = {}
