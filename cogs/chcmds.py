@@ -126,7 +126,8 @@ class Path():
 	async def doSearch(self, inQuery):
 		self.searchData = self.chUtils.encoreSearch(inQuery)
 		self.numCharts = len(self.searchData)
-		self.selection = -1
+		self.selection = 1 if self.numCharts == 1 else -1
+
 		await self.show()
 
 	def genInstructionEmbed(self) -> discord.Embed:
@@ -143,7 +144,6 @@ class Path():
 
 		if self.numCharts > 0:
 			for i, chart in enumerate(self.searchData):
-				print(f"CHECK {i} {self.selection}")
 				if i + 1 == self.selection:
 					chartListing += f"**{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}**\n"
 				else:
