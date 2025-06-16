@@ -143,7 +143,11 @@ class Path():
 
 		if self.numCharts > 0:
 			for i, chart in enumerate(self.searchData):
-				chartListing += f"{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}\n"
+				print(f"CHECK {i} {self.selection}")
+				if i + 1 == self.selection:
+					chartListing += f"**{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}**\n"
+				else:
+					chartListing += f"{i+1}: {chart["name"]} - {chart["artist"]} - {chart["album"]} - {chart["charter"]}\n"
 		else:
 			chartListing = "No results found for search"
 
@@ -154,7 +158,6 @@ class Path():
 		return embed
 
 	def genResultEmbed(self, sngUuid) -> discord.Embed:
-		print(f"Selection in embed is {self.selection - 1}")
 		theSong = self.searchData[self.selection - 1]
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "/ch path run result"
@@ -208,6 +211,8 @@ class PathView(discord.ui.View):
 
 			if submitModal.selection > 0:
 				self.path.selection = submitModal.selection
+
+			await self.path.show()
 
 			return
 		elif self.path.numCharts == 1:
