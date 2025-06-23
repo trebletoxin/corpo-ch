@@ -36,41 +36,18 @@ class PlayerSelect(discord.ui.Select):
 
 		await self.match.showTool()
 
-class SongRoundSelect(discord.ui.Select):
-	def __init__(self, match):
-		self.match = match
-		songOpts = []
-		for song in self.match.setlist:
-			if song in self.match.ban1 or song in self.match.ban2:
-				continue
-			else:
-				theSong = discord.SelectOption(label=song['name'], description=f"{song['artist']} - {song['charter']}")
-				songOpts.append(theSong)
-		super().__init__(placeholder="Song Played", max_values=1, options=songOpts, custom_id="roundsong_sel")
-
-	async def callback(self, interaction: discord.Integration):
-		pass
-
-class PlayerRoundSelect(discord.ui.Select):
-	def __init__(self, match):
-		self.match = match
-		super().__init__(placeholder="Winning Player", max_values=1, select_type=discord.ComponentType.user_select, options=[self.match.player1, self.match.player2], custom_id="roundwin_sel")
-
-	async def callback(self, interaction: discord.Integration):
-		pass
-
 class BanSelect(discord.ui.Select):
 	def __init__(self, match, custom_id):
 		self.match = match
 
 		if 'player1' in custom_id:
 			if self.match.ban1:
-				placeholder = f"{self.match.player1.display_name} bans {self.match.ban1['name']}"
+				placeholder = f"{self.match.player1.display_name} bans {self.match.ban1}"
 			else:
 				placeholder = f"Select {self.match.player1.display_name}\'s Ban"
 		elif 'player2' in custom_id:
 			if self.match.ban2:
-				placeholder = f"{self.match.player2.display_name} bans {self.match.ban2['name']}"
+				placeholder = f"{self.match.player2.display_name} bans {self.match.ban2}"
 			else:
 				placeholder = f"Select {self.match.player2.display_name}\'s Ban"
 
@@ -85,16 +62,64 @@ class BanSelect(discord.ui.Select):
 		theSong = {}
 		for song in self.match.setlist:
 			if self.values[0] in song['name']:
-				theSong = song
+				theSong = song['name']
 				break
 
 		if "player1" in self.custom_id:
 			self.match.ban1 = theSong
-			await interaction.respond(f"Player 1 is {self.values[0]}", ephemeral=True, delete_after=5)
+			await interaction.respond(f"{self.match.player1.display_name}\'s ban selection is {self.values[0]}", ephemeral=True, delete_after=5)
 		elif "player2" in self.custom_id:
 			self.match.ban2 = theSong
-			await interaction.respond(f"Player 2 is {self.values[0]}", ephemeral=True, delete_after=5)
+			await interaction.respond(f"{self.match.player2.display_name}\'s ban selection is  {self.values[0]}", ephemeral=True, delete_after=5)
 
+		await self.match.showTool()
+
+class SongRoundSelect(discord.ui.Select):
+	def __init__(self, match):
+		self.match = match
+		if self.match.roundSngPlchldr != "":
+			placeholder = f"Song Played: {self.match.roundSngPlchldr}"
+		else:
+			placeholder = "Song Played"
+
+		songOpts = []
+		for song in self.match.setlist:
+			if song['name'] in self.match.ban1 or song['name'] in self.match.ban2:
+				continue
+			else:
+				theSong = discord.SelectOption(label=song['name'], description=f"{song['artist']} - {song['charter']}")
+				songOpts.append(theSong)
+		super().__init__(placeholder=placeholder, max_values=1, options=songOpts, custom_id="roundsong_sel")
+
+	async def callback(self, interaction: discord.Integration):
+		self.match.roundSngPlchldr = self.values[0]
+		await interaction.respond(f"Selected song that was played: {self.values[0]}", ephemeral=True, delete_after=5)
+		await self.match.showTool()
+
+class PlayerRoundSelect(discord.ui.Select):
+	def __init__(self, match):
+		self.match = match
+		if self.match.roundSngPlchldr:
+			placeholder = f"Song Played: {self.match.roundSngPlchldr}"
+		else:
+			placeholder = "Song Played"
+
+		player1 = discord.SelectOption(label=self.match.player1.display_name)
+		player2 = discord.SelectOption(label=self.match.player2.display_name)
+		super().__init__(placeholder=placeholder, max_values=1, options=[player1, player2], custom_id="roundwin_sel")
+
+	async def callback(self, interaction: discord.Integration):
+		if self.values[0] == self.match.player1.display_name:
+			winner = self.match.player1
+			placeholder = f"Winner: {self.match.player1.display_name}"
+		elif self.values[0] == self.match.player2.display_name:
+			winner = self.match.player2
+			placeholder = f"Winner: {self.match.player2.display_name}"
+		else:
+			placeholder = "Song Winner"
+
+		self.match.roundWinPlchldr = winner
+		await interaction.respond(f"Player {winner.display_name}", ephemeral=True, delete_after=5)
 		await self.match.showTool()
 
 ##Need modal for groups/player selection
@@ -128,18 +153,18 @@ class DiscordMatch():
 		self.player2 = None
 		self.ban1 = None
 		self.ban2 = None
+		self.roundSngPlchldr = ""
+		self.roundWinPlchldr = None
 		#self.tourney = None #ID for tourney in MySQL - based on discord server id obtained from ctx.guild.id
 		self.confirmCancel = False
 		self.playersPicked = False
 		self.bansPicked = False
 		self.shown = False
 		#TODO - figure out handling on groups stage vs playoffs
+		#TODO - figure out how to allow exhibition matches(?)
 
 	async def init(self):
 		pass
-
-	async def cancelMatch(self):
-		pass #to implement
 
 	async def showTool(self):
 		pass #not ready to let this execute
@@ -157,17 +182,25 @@ class DiscordMatch():
 	async def genMatchEmbed(self):
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "Current Match Results"
+
 		if self.playersPicked:
 			embed.add_field(name="Players", value=f"{self.player1.display_name} vs {self.player2.display_name}", inline=False)
 		else:
 			embed.add_field(name="Players", value=f"Select players then hit submit to start", inline=False)
 
 		if self.bansPicked:
-			embed.add_field(name="Bans", value=f"{self.player1.display_name} bans {self.ban1['name']}\n{self.player2.display_name} bans {self.ban2['name']}", inline=False)
-		else:
+			embed.add_field(name="Bans", value=f"{self.player1.display_name} bans {self.ban1}\n{self.player2.display_name} bans {self.ban2}", inline=False)
+		elif self.playersPicked and not self.bansPicked:
 			embed.add_field(name="Bans", value="Select bans then hit submit to continue", inline=False)
 
-		#add completed rounds
+		if self.playersPicked and self.bansPicked:
+			if len(self.rounds) > 0:
+				rndStr = ""
+				for rnd in self.rounds:
+					rndStr += f"X Picks - {rnd['song']} - {rnd['winner'].display_name} wins!\n"
+				embed.add_field(name="Played Rounds", value=rndStr, inline=False)
+			else:
+				embed.add_field(name="Played Rounds", value="No rounds played yet", inline=False)
 
 		return embed
 
@@ -209,18 +242,33 @@ class DiscordMatchView(discord.ui.View):
 			self.add_item(bans)
 			self.add_item(BanSelect(self.match, "player1_ban"))
 			self.add_item(BanSelect(self.match, "player2_ban"))
+		elif self.match.playersPicked and self.match.bansPicked:
+			rounds = discord.ui.Button(label="Add Round", style=discord.ButtonStyle.secondary, custom_id="roundBtn")
+			rounds.callback = self.roundBtn
 
-		rounds = discord.ui.Button(label="Add Round", style=discord.ButtonStyle.secondary, custom_id="roundBtn")
-		rounds.callback = self.roundBtn
-		submit = discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submitBtn")
-		submit.callback = self.submitBtn
+			if self.match.roundWinPlchldr == None or self.match.roundSngPlchldr == "":
+				rounds.disabled = True
+			
+			self.add_item(rounds)
 
-		
-		
-		#self.add_item(rounds)
-			
-		#Perform check if one user has amount of wins necessary to complete a match, then enable submit button
-			
+			submit = discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submitBtn")
+			submit.callback = self.submitBtn
+
+			ply1Wins = 0
+			ply2Wins = 0
+			for rnd in self.match.rounds:
+				if rnd['winner'].id == self.match.player1.id:
+					ply1Wins += 1
+				elif rnd['winner'].id == self.match.player2.id:
+					ply2Wins += 1
+
+			if ply1Wins < 4 and ply2Wins < 4:
+				submit.disabled = True
+
+			self.add_item(submit)
+			self.add_item(SongRoundSelect(self.match))
+			self.add_item(PlayerRoundSelect(self.match))
+
 	async def cancelBtn(self, interaction: discord.Interaction):
 		if self.match.confirmCancel:
 			await interaction.response.edit_message(content="Closing", embed=None, view=None, delete_after=1)
@@ -242,7 +290,11 @@ class DiscordMatchView(discord.ui.View):
 		await self.match.showTool()
 
 	async def roundBtn(self, interaction: discord.Interaction):
-		await interaction.response.send_message("Not implemented yet")
+		await interaction.response.defer(invisible=True)
+		self.match.rounds.append({ 'song' : self.match.roundSngPlchldr, 'winner' : self.match.roundWinPlchldr })
+		self.match.roundWinPlchldr = None
+		self.match.roundSngPlchldr = ""
+		await self.match.showTool()
 
 	async def submitBtn(self, interaction: discord.Interaction):
 		await interaction.response.send_message("Not implemented yet")
