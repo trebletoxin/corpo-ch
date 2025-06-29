@@ -156,7 +156,7 @@ class DiscordMatch():
 		#TODO - figure out how to allow exhibition matches(?)
 
 	async def init(self):
-		pass
+		pass #Function will be needed when we need to fetch DB data on class construction
 
 	async def finishMatch(self, interaction):
 		#Save match results to DB
@@ -166,7 +166,6 @@ class DiscordMatch():
 	async def showTool(self, interaction):
 		await self.matchDB.saveMatch(self)
 		self.msg = await interaction.edit(embeds=[self.genMatchEmbed()], content=None, view=DiscordMatchView(self))
-		#print(f"What? {self.msg.id} {self.msg.channel.id}")
 
 	def genMatchEmbed(self):
 		embed = discord.Embed(colour=0x3FFF33)

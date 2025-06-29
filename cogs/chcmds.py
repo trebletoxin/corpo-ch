@@ -39,7 +39,6 @@ class CHOptModal(Modal):
 		
 		await interaction.response.defer(invisible=True)
 		self.choptOpts = retData
-		#await self.path.show(interaction)
 		self.stop()
 
 class EncoreModal(Modal):
@@ -156,7 +155,6 @@ class Path():
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "/ch path run result"
 		embed.set_author(name=self.ctx.user.display_name, icon_url=self.ctx.user.avatar.url)
-		#fp = discord.File(outPng, filename="path.png", description="CHOpt path for...")
 		url = f"https://che.crmea.de/{sngUuid}.png"
 		embed.set_thumbnail(url=url)
 		embed.add_field(name="CHOpt Path For", value=f"{theSong["name"]} - {theSong["artist"]} - {theSong["album"]} - {theSong["charter"]}", inline=False)
@@ -196,7 +194,6 @@ class PathView(discord.ui.View):
 		await interaction.response.send_modal(choptsModal)
 		await choptsModal.wait()
 
-		#await interaction.response.defer(invisible=True)
 		self.path.choptOpts = choptsModal.choptOpts
 		await self.path.show()
 
@@ -206,7 +203,6 @@ class PathView(discord.ui.View):
 			submitModal = SubmitModal(self.path, self.path.numCharts, title="Chart Number to use for CHOpt Path")
 			await interaction.response.send_modal(submitModal)
 			await submitModal.wait()
-			print(f"Got submit chart {submitModal.selection}")
 			if submitModal.selection > 0:
 				self.path.selection = submitModal.selection
 
@@ -216,11 +212,9 @@ class PathView(discord.ui.View):
 		elif self.path.numCharts == 1:
 			self.path.selection = 1
 
-		#await interaction.edit_original_response(content="Generating...", view=None, embeds=[])
 		await self.path.hide()
 		await interaction.response.defer(invisible=False)
 		await self.path.showResult(interaction)
-		#self.stop()
 
 class CHCmds(commands.Cog):
 	def __init__(self, bot):
@@ -230,7 +224,6 @@ class CHCmds(commands.Cog):
 	@ch.command(name='path',description='Generate a path for a given chart on Chorus', integration_types={discord.IntegrationType.guild_install, discord.IntegrationType.user_install})
 	async def path(self, ctx):
 		path = Path(ctx)
-		#Responding to a ctx generates the message
 		await ctx.respond(content="Setting up", ephemeral=True)
 		await path.show()
 
