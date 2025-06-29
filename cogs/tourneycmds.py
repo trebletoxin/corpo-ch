@@ -123,7 +123,7 @@ class DiscordMatch():
 	def __init__(self, message, matchDB):
 		self.matchDB = matchDB
 		self.msg = message
-		self.creator = message.user if hasattr(message, 'user') else None
+		self.ref = message.user if hasattr(message, 'user') else None
 		self.channel = message.channel if hasattr(message, 'channel') else None
 		self.id = -1
 		self.rounds = [] #list to append a dict of a match result
@@ -155,9 +155,6 @@ class DiscordMatch():
 		#TODO - figure out handling on groups stage vs playoffs
 		#TODO - figure out how to allow exhibition matches(?)
 
-		#NOTES - Persistent reload - remove dependency on ctx object. Depend on guildid channelid + messageid - save to DB
-		#      - Save all objects in this class to DB (plus ID's) - then on restart, reload the 
-
 	async def init(self):
 		pass
 
@@ -174,7 +171,7 @@ class DiscordMatch():
 	def genMatchEmbed(self):
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = "Current Match Results"
-		embed.set_author(name=f"Ref: {self.creator.display_name}", icon_url=self.creator.avatar.url)
+		embed.set_author(name=f"Ref: {self.ref.display_name}", icon_url=self.ref.avatar.url)
 
 		if self.playersPicked:
 			embed.add_field(name="Players", value=f"{self.player1.display_name} vs {self.player2.display_name}", inline=False)
@@ -254,7 +251,7 @@ class DiscordMatchView(discord.ui.View):
 			self.add_item(submit)
 
 	async def interaction_check(self, interaction: discord.Interaction):
-		if interaction.user.id == self.match.creator.id:
+		if interaction.user.id == self.match.ref.id:
 			return True
 		else:
 			await interaction.response.send_message("You are not the ref for this match", ephemeral=True, delete_after=5)
@@ -263,6 +260,7 @@ class DiscordMatchView(discord.ui.View):
 	async def cancelBtn(self, interaction: discord.Interaction):
 		if self.match.confirmCancel:
 			await interaction.response.edit_message(content="Closing", embed=None, view=None, delete_after=1)
+			await self.match.matchDB.cancelMatch(self.match)
 			self.stop()
 		else:
 			self.match.confirmCancel = True
@@ -300,9 +298,9 @@ class TourneyCmds(commands.Cog):
 		#TODO - Self Ref Match Check setup (DM user that didn't run the command to confirm?)
 		#     - Can bypass above with having a "Ref" role assigned
 		message = await ctx.respond("Setting up")
-		path = DiscordMatch(message, self.bot.tourneyDB)
-		await path.init()
-		await path.showTool(message)
+		match = DiscordMatch(message, self.bot.tourneyDB)
+		await match.init()
+		await match.showTool(message)
 
 	@match.command(name='reftool', description='Match report done with the ref tool', integration_types={discord.IntegrationType.guild_install})
 	async def refToolCmd(self, ctx):

@@ -8,6 +8,7 @@ import chutils
 class CHOptModal(Modal):
 	def __init__(self, path, *args, **kwargs):
 		super().__init__(*args, **kwargs)
+		self.path = path
 		self.choptOpts = None
 		self.add_item(InputText(label="Early Whammy %", style=discord.InputTextStyle.short, required=True, placeholder='0-100'))
 		self.add_item(InputText(label="Squeeze %", style=discord.InputTextStyle.short, required=True, placeholder='0-100'))
@@ -35,9 +36,10 @@ class CHOptModal(Modal):
 			return
 		else:
 			retData['speed'] = int(self.children[2].value)
-
+		
+		await interaction.response.defer(invisible=True)
 		self.choptOpts = retData
-		await interaction.response.send_message("CHOpt options set!", ephemeral=True, delete_after=5)
+		#await self.path.show(interaction)
 		self.stop()
 
 class EncoreModal(Modal):
@@ -63,8 +65,8 @@ class EncoreModal(Modal):
 			retData['charter'] = self.children[3].value
 			retString += f" - Charter: {retData['charter']}"
 
+		await interaction.response.defer(invisible=True)
 		await self.path.doSearch(retData)
-		await interaction.response.send_message(f"Searched: {retString}", ephemeral=True, delete_after=5)
 		self.stop()
 
 class SubmitModal(Modal):
@@ -80,56 +82,47 @@ class SubmitModal(Modal):
 			await interaction.response.send_message(f"Invalid chart number, needs to be 1-{self.path.numCharts}", ephemeral=True, delete_after=5)
 		else:
 			self.selection = int(self.children[0].value)
-			await interaction.response.send_message(f"Selected chart {self.selection}, hit submit again to generate the path!", ephemeral=True, delete_after=5)
+			await interaction.response.defer(invisible=True)
 			self.stop()
 
 class Path():
 	def __init__(self, ctx):
 		self.ctx = ctx
+		self.user = ctx.user
 		self.chUtils = chutils.CHUtils()
 		self.searchData = None
 		self.numCharts = -1
 		self.selection = -1
 		self.choptOpts = { 'whammy' : 0, 'squeeze' : 0, 'speed' : 100 }
-		self.shown = False
 
 	async def show(self):
-		if self.shown:
-			await self.ctx.interaction.edit_original_response(embeds=[self.genChartEmbed()], view=PathView(self, False if self.searchData is None else True))
-		else:
-			await self.ctx.respond(embeds=[self.genInstructionEmbed()], view=PathView(self, False), ephemeral=True)
-			self.shown = True
+		await self.ctx.interaction.edit_original_response(embeds=[self.genChartEmbed()], content=None, view=PathView(self, False if self.searchData is None else True))
 
 	async def hide(self):
-		if self.shown:
-			await self.ctx.interaction.delete_original_response()
+		await self.ctx.interaction.delete_original_response()
 
 	async def showResult(self, interaction):
 		sngUuid = self.chUtils.encoreDownload(self.searchData[self.selection - 1])
 
 		if not self.chUtils.sngDecode(sngUuid):
-			await interaction.followup.send('Path generation died on sng file decode. SNG UUID: {sngUuid}', ephemeral=True)
+			await interaction.followup.send(f'Path generation died on sng file decode. SNG UUID: {sngUuid}', ephemeral=True)
 			await self.hide()
 			return
 
 		outPng = self.chUtils.CHOpt(sngUuid, self.choptOpts)
 		if not outPng:
-			await interaction.followup.send("Path generation died on CHOpt call.", ephemeral=True)
+			await interaction.followup.send(f"Path generation died on CHOpt call. SNG UUID: {sngUuid}", ephemeral=True)
 			await self.hide()
 			return
 
 		embed = self.genResultEmbed(sngUuid)
-		await interaction.followup.send(embed=embed, view=None, ephemeral=False)
-		await self.hide()
-		#await self.hide()
+		await interaction.edit(embed=embed, view=None)
 		self.cleanup(sngUuid, outPng)
 
 	async def doSearch(self, inQuery):
 		self.searchData = self.chUtils.encoreSearch(inQuery)
 		self.numCharts = len(self.searchData)
 		self.selection = 1 if self.numCharts == 1 else -1
-
-		await self.show()
 
 	def genInstructionEmbed(self) -> discord.Embed:
 		embed = discord.Embed(colour=0x3FFF33)
@@ -192,7 +185,10 @@ class PathView(discord.ui.View):
 
 	@discord.ui.button(label='Search', style=discord.ButtonStyle.secondary)
 	async def searchBtn(self, button, interaction: discord.Interaction):
-		await interaction.response.send_modal(EncoreModal(self.path, title="Encore search for chart"))
+		modal = EncoreModal(self.path, title="Encore search for chart")
+		await interaction.response.send_modal(modal)
+		await modal.wait()
+		await self.path.show()
 
 	@discord.ui.button(label='CHOpt Options', style=discord.ButtonStyle.secondary, custom_id="chopts")
 	async def choptsBtn(self, button, interaction: discord.Interaction):
@@ -200,6 +196,7 @@ class PathView(discord.ui.View):
 		await interaction.response.send_modal(choptsModal)
 		await choptsModal.wait()
 
+		#await interaction.response.defer(invisible=True)
 		self.path.choptOpts = choptsModal.choptOpts
 		await self.path.show()
 
@@ -209,7 +206,7 @@ class PathView(discord.ui.View):
 			submitModal = SubmitModal(self.path, self.path.numCharts, title="Chart Number to use for CHOpt Path")
 			await interaction.response.send_modal(submitModal)
 			await submitModal.wait()
-
+			print(f"Got submit chart {submitModal.selection}")
 			if submitModal.selection > 0:
 				self.path.selection = submitModal.selection
 
@@ -219,9 +216,11 @@ class PathView(discord.ui.View):
 		elif self.path.numCharts == 1:
 			self.path.selection = 1
 
-		await interaction.response.defer(invisible=True)
-		self.stop()
+		#await interaction.edit_original_response(content="Generating...", view=None, embeds=[])
+		await self.path.hide()
+		await interaction.response.defer(invisible=False)
 		await self.path.showResult(interaction)
+		#self.stop()
 
 class CHCmds(commands.Cog):
 	def __init__(self, bot):
@@ -231,6 +230,8 @@ class CHCmds(commands.Cog):
 	@ch.command(name='path',description='Generate a path for a given chart on Chorus', integration_types={discord.IntegrationType.guild_install, discord.IntegrationType.user_install})
 	async def path(self, ctx):
 		path = Path(ctx)
+		#Responding to a ctx generates the message
+		await ctx.respond(content="Setting up", ephemeral=True)
 		await path.show()
 
 def setup(bot):

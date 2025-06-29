@@ -1,4 +1,4 @@
-import mysqlhandler, json, aiomysql
+import mysqlhandler, json, aiomysql, discord
 from cogs.tourneycmds import DiscordMatch, DiscordMatchView
 
 #CREATE TABLE match_views ( matchid INT AUTO_INCREMENT NOT NULL, channelid BIGINT UNSIGNED NOT NULL, messageid BIGINT UNSIGNED NOT NULL, matchjson TEXT NULL, PRIMARY KEY (matchid) ) ENGINE=INNODB;
@@ -14,7 +14,7 @@ class TourneyDB():
 			#need to replace discord objects in rounds with their ID to properly save
 			saveRnds.append({'song' : rnd['song'], 'winner' : rnd['winner'].id })
 		saveData = {
-			'creator' : match.creator.id,
+			'ref' : match.ref.id,
 			'rounds' : saveRnds,
 			'numRounds' : match.numRounds,
 			'player1' : match.player1.id if match.player1 else None,
@@ -35,6 +35,7 @@ class TourneyDB():
 				row = await sql.query_first("SELECT * FROM match_views WHERE (messageid = %s)", (match.msg.id, ))
 				match.id = row['matchid']
 			else:
+				#Interactions don't *always* change the messageid, but is needed when it does update
 				if hasattr(match.msg, 'id'):
 					await sql.query("UPDATE match_views SET matchjson = %s, messageid = %s WHERE (matchid = %s)", (json.dumps(saveData), match.msg.id, match.id, ))						
 				else:
@@ -48,7 +49,12 @@ class TourneyDB():
 		for row in rows:
 			print(f"Loading match view {row['channelid']} {row['messageid']}")
 			channel = self.client.get_channel(row['channelid'])
-			msg = await channel.fetch_message(row['messageid'])
+			try:
+				msg = await channel.fetch_message(row['messageid'])
+			except discord.errors.NotFound as e:
+				print(f"Match {row['messageid']} not found, deleting")
+				await cur.execute("DELETE FROM match_views WHERE (matchid = %s)", (row['matchid'],))
+				continue
 			
 			theMatch = DiscordMatch(msg, self)
 			theData = json.loads(row['matchjson'])
@@ -73,7 +79,7 @@ class TourneyDB():
 				theRounds.append({'song' : rnd['song'], 'winner' : theWinner})
 
 			theMatch.id = row['matchid']
-			theMatch.creator = self.client.get_user(theData['creator'])
+			theMatch.ref = self.client.get_user(theData['ref'])
 			theMatch.rounds = theRounds
 			theMatch.roundSngPlchldr = theData['roundSng']
 			theMatch.numRounds = theData['numRounds']
@@ -83,7 +89,11 @@ class TourneyDB():
 
 		await self.sqlBroker.commit(cur)
 		
+	async def cancelMatch(self, match):
+		async with self.sqlBroker.context() as sql:
+			await sql.query("DELETE FROM match_views WHERE (matchid = %s)", (match.id,))
+
 	async def finishMatch(self, match):
 		async with self.sqlBroker.context() as sql:
 			#Save all match
-			await sql.query("DELETE FROM match_views WHERE (messageid = %s)", (match.msg.id,))
+			await sql.query("DELETE FROM match_views WHERE (matchid = %s)", (match.id,))

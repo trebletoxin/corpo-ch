@@ -26,10 +26,11 @@ class CHUtils():
 			return None
 
 		outPng = f'./CHOpt/output/{sngUuid}.png'
+		print(f"Output PNG: {outPng}")
 		choptCall = f"{self.CHOptPath} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {inChart} -i guitar -d expert -o {outPng}"
 
 		try:
-			subprocess.run(choptCall, check=True, shell=True)
+			subprocess.run(choptCall, check=True, shell=True, stdout=subprocess.DEVNULL)
 		except Exception as e:
 			print(f"CHOpt call failed with exception: {e}")
 			return None
@@ -83,7 +84,7 @@ class CHUtils():
 		inputSng = f'{self.sngCliInput}/{sngUuid}'
 		outputSng = f'{self.sngCliOutput}'
 		try:
-			proc = subprocess.run(f'{self.sngCliPath} decode -in {inputSng} -out {outputSng} --noStatusBar', check=True, shell=True)
+			proc = subprocess.run(f'{self.sngCliPath} decode -in {inputSng} -out {outputSng} --noStatusBar', check=True, shell=True, stdout=subprocess.DEVNULL)
 		except Exception as e:
 			print(f"SngCli Decode Failed: {e}")
 			return False
