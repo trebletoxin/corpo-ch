@@ -186,8 +186,16 @@ class DiscordMatch():
 		if self.playersPicked and self.bansPicked:
 			if len(self.rounds) > 0:
 				rndStr = ""
-				for rnd in self.rounds:
-					rndStr += f"X Picks - {rnd['song']} - {rnd['winner'].display_name} wins!\n"
+				for i, rnd in enumerate(self.rounds):
+					if i == 0:
+						playerPick = self.player1 #Need to figure out this on ban deferrals
+					else:
+						if self.rounds[i-1]['winner'].id == self.player1.id:
+							playerPick = self.player2
+						else:
+							playerPick = self.player1
+
+					rndStr += f"{playerPick.display_name} Picks - {rnd['song']} - {rnd['winner'].display_name} wins!\n"
 				embed.add_field(name="Played Rounds", value=rndStr, inline=False)
 			else:
 				embed.add_field(name="Played Rounds", value="No rounds played yet", inline=False)
