@@ -113,7 +113,9 @@ class SongRoundSelect(discord.ui.Select):
 
 		songOpts = []
 		for song in self.match.setlist:
-			if song['name'] in self.match.ban1 or song['name'] in self.match.ban2 or song['name'] in playedSongs:
+			if (song['name'] in self.match.ban1['name'] and not self.match.ban1['save']):
+				continue
+			elif song['name'] in self.match.ban2['name'] or song['name'] in playedSongs:
 				continue
 			else:
 				theSong = discord.SelectOption(label=song['name'], description=f"{song['artist']} - {song['charter']}")
