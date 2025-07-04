@@ -1,3 +1,4 @@
+import math
 import discord
 from discord.ext import commands
 from discord.ui import *
@@ -50,6 +51,13 @@ class BanSelect(discord.ui.Select):
 				placeholder = f"Select {self.match.player2.display_name}\'s Ban"
 
 		songOpts = []
+		#Jank "save" option - could make it have an option for 2 selections, but only accept 1 if this option is selected(?)
+		if self.match.savesEnabled:
+			songOpts.append(discord.SelectOption(label="Song Save", description="No ban used"))
+			maxVals = 2
+		else:
+			maxVals = 1
+
 		for song in self.match.setlist:
 			if (self.match.ban1 and song['name'] in self.match.ban1) or (self.match.ban2 and song['name'] in self.match.ban2):
 				continue
@@ -57,7 +65,7 @@ class BanSelect(discord.ui.Select):
 				theSong = discord.SelectOption(label=song['name'], description=f"{song['artist']} - {song['charter']}")
 				songOpts.append(theSong)
 
-		super().__init__(placeholder=placeholder, max_values=1,	options=songOpts, custom_id=custom_id)
+		super().__init__(placeholder=placeholder, max_values=maxVals,	options=songOpts, custom_id=custom_id)
 
 	async def callback(self, interaction: discord.Interaction):
 		theSong = {}
@@ -129,16 +137,16 @@ class DiscordMatch():
 		self.rounds = [] #list to append a dict of a match result
 		self.numRounds = 7 #Need to get the number of rounds from the tournament settings
 		self.setlist = [ #Test Data
-		{"name" : "Conjunction", "artist" : "Casiopea", "charter" : "JoeyD" },
-		{"name" : "Cutting Edge", "artist" : "Kiko Loureiro", "charter" : "Thundahk" },
-		{"name" : "Break Your Crank", "artist" : "Guilhem Desq", "charter" : "Aren Eternal" },
-		{"name" : "Prayer Position", "artist" : "Endarkenment", "charter" : "Chezy" },
-		{"name" : "Endarkenment", "artist" : "Anaal Nathrakh", "charter" : "Miscellany" },
-		{"name" : "Chakh Le", "artist" : "Bloodywood", "charter" : "Figneutered" },
-		{"name" : "Que Pasa (feat. Dave Mustaine)", "artist" : "John 5", "charter" : "OHM" },
-		{"name" : "You Think I Ain't Worth a Dollar", "artist" : "Erra", "charter" : "NCV" },
-		{"name" : "Crownless", "artist" : "Nightwish", "charter" : "Jackie & Aren Eternal" },
-		{"name" : "Orange Grove", "artist" : "Unprocessed", "charter" : "Deltarak" },
+		{"name" : "Peanut Choker", "artist" : "Iglooghost", "charter" : "Pix_" },
+		{"name" : "The Cataclysm", "artist" : "Takayoshi Oshmura", "charter" : "xX760Xx" },
+		{"name" : "Trust", "artist" : "Moon Tooth", "charter" : "Chezy" },
+		{"name" : "Vantablack", "artist" : "Dirtyphonics and Sullivan King", "charter" : "Deltarak + Aren Eternal" },
+		{"name" : "Sell Out", "artist" : "Reel Big Fish", "charter" : "Unknown" },
+		{"name" : "Mind As Universe", "artist" : "Persefone", "charter" : "BRUTALBREAKDOWN" },
+		{"name" : "Backbone", "artist" : "Gojira", "charter" : "Miscellany" },
+		{"name" : "Anything", "artist" : "An Endless Sporadic", "charter" : "XEntombmentX" },
+		{"name" : "Paranoia Sonatina Grande", "artist" : "Splegel vs Yukino", "charter" : "OHM" },
+		{"name" : "Moonlight Sorcery", "artist" : "The Moonlit Dance of the Twisted Jester", "charter" : "Deltarak" },
 		]
 		#self.setlist = None #ID for setlist inside of tourney that contains songs - can we tee off of a channel id in discord?
 		##NOTE - we may be able to have a command to set a channel in discord for specifc brackets(?)
@@ -148,6 +156,8 @@ class DiscordMatch():
 		self.ban2 = None
 		self.roundSngPlchldr = ""
 		self.roundWinPlchldr = None
+		#Corp tourney saves framework
+		self.savesEnabled = False
 		#self.tourney = None #ID for tourney in MySQL - based on discord server id obtained from ctx.guild.id
 		self.confirmCancel = False
 		self.playersPicked = False
@@ -169,22 +179,24 @@ class DiscordMatch():
 
 	def genMatchEmbed(self):
 		embed = discord.Embed(colour=0x3FFF33)
-		embed.title = "Current Match Results"
 		embed.set_author(name=f"Ref: {self.ref.display_name}", icon_url=self.ref.avatar.url)
 
+		#Make these mentionable?
 		if self.playersPicked:
-			embed.add_field(name="Players", value=f"{self.player1.display_name} vs {self.player2.display_name}", inline=False)
+			embed.add_field(name="Players", value=f"{self.player1.mention} vs {self.player2.mention}", inline=False)
 		else:
 			embed.add_field(name="Players", value=f"Select players then hit submit to start", inline=False)
 
 		if self.bansPicked:
-			embed.add_field(name="Bans", value=f"{self.player1.display_name} bans {self.ban1}\n{self.player2.display_name} bans {self.ban2}", inline=False)
+			embed.add_field(name="Bans", value=f"{self.player1.mention} bans {self.ban1}\n{self.player2.mention} bans {self.ban2}", inline=False)
 		elif self.playersPicked and not self.bansPicked:
 			embed.add_field(name="Bans", value="Select bans then hit submit to continue", inline=False)
 
 		if self.playersPicked and self.bansPicked:
 			if len(self.rounds) > 0:
 				rndStr = ""
+				ply1Wins = 0
+				ply2Wins = 0
 				for i, rnd in enumerate(self.rounds):
 					if i == 0:
 						playerPick = self.player1 #Need to figure out this on ban deferrals
@@ -193,8 +205,24 @@ class DiscordMatch():
 							playerPick = self.player2
 						else:
 							playerPick = self.player1
+						
+					if rnd['winner'].id == self.player1.id:
+						ply1Wins += 1
+					else:
+						ply2Wins += 1
 
-					rndStr += f"{playerPick.display_name} Picks - {rnd['song']} - {rnd['winner'].display_name} wins!\n"
+					rndStr += f"{playerPick.mention} Picks - {rnd['song']} - {rnd['winner'].mention} wins!\n\n"
+
+				if ply1Wins >= math.ceil(self.numRounds/2):
+					rndStr += f"{self.player1.mention} WINS!"
+					embed.title = "Match Results" 
+				elif ply2Wins >= math.ceil(self.numRounds/2):
+					rndStr += f"{self.player2.mention} WINS!"
+					embed.title = "Match Results"
+				else:
+					#TODO - Get bracket name added in the title
+					embed.title = "Current Match Results"
+
 				embed.add_field(name="Played Rounds", value=rndStr, inline=False)
 			else:
 				embed.add_field(name="Played Rounds", value="No rounds played yet", inline=False)
@@ -224,7 +252,7 @@ class DiscordMatchView(discord.ui.View):
 			bans = discord.ui.Button(label="Submit Bans", style=discord.ButtonStyle.secondary, custom_id="bansBtn")
 			bans.callback = self.bansBtn
 
-			if not self.match.ban1 or not self.match.ban2:
+			if (not self.match.ban1 or not self.match.ban2) and not self.match.savesEnabled: #This is is not needed once the saves are implemented
 				bans.disabled = True
 
 			self.add_item(bans)
@@ -250,7 +278,7 @@ class DiscordMatchView(discord.ui.View):
 				elif rnd['winner'].id == self.match.player2.id:
 					ply2Wins += 1
 
-			if ply1Wins < 4 and ply2Wins < 4:
+			if ply1Wins < math.ceil(self.match.numRounds/2) and ply2Wins < math.ceil(self.match.numRounds/2):
 				submit.disabled = True
 				self.add_item(SongRoundSelect(self.match))
 				self.add_item(PlayerRoundSelect(self.match))
