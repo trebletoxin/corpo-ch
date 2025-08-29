@@ -16,7 +16,7 @@ class CHUtils():
 		self.encore['adv'] = 'https://api.enchor.us/search/advanced'
 		self.encore['dl'] = 'https://files.enchor.us/'
 
-	def CHOpt(self, sngUuid, opts) -> str:
+	def CHOpt(self, sngUuid, opts, outputPath) -> str:
 		if os.path.isfile(f'{self.sngCliOutput}/{sngUuid}/notes.chart'):
 			inChart = f'{self.sngCliOutput}/{sngUuid}/notes.chart'
 		elif os.path.isfile(f'{self.sngCliOutput}/{sngUuid}/notes.mid'):
@@ -27,7 +27,11 @@ class CHUtils():
 
 		outPng = f'./CHOpt/output/{sngUuid}.png'
 		print(f"Output PNG: {outPng}")
-		choptCall = f"{self.CHOptPath} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {inChart} -i guitar -d expert -o {outPng}"
+
+		if outputPath:
+			choptCall = f"{self.CHOptPath} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {inChart} -i guitar -d expert -o {outPng}"
+		else:
+			choptCall = f"{self.CHOptPath} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {inChart} -b -i guitar -d expert -o {outPng}"
 
 		try:
 			subprocess.run(choptCall, check=True, shell=True, stdout=subprocess.DEVNULL)
