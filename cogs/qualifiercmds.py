@@ -124,9 +124,7 @@ class QualifierCmds(commands.Cog):
 	async def qualifierCSVCmd(self, ctx):
 		# pull data
 		tourney = self.bot.tourneyDB.getActiveTournies(ctx.guild.id)
-		if type(tourney) == dict:
-			tourneyId = tourney.id
-		else: # no active tourney found
+		if type(tourney) != dict: # no active tourney found
 			await ctx.respond("No active tournament was found.",ephemeral=True)
 			return
 		
