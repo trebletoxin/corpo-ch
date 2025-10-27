@@ -52,6 +52,16 @@ class TourneyDB():
 			row['stegjson'] = json.loads(row['stegjson'])
 
 		return row
+	
+	async def getTourneyQualifierSubmissions(self, tourneyId: int) -> list:
+		async with self.sqlBroker.context() as sql:
+			submissions = await sql.query(f"SELECT * FROM qualifiers WHERE (tourneyid = {tourneyId})")
+		
+		for i, row in submissions:
+			if row is not None:
+				row['stegjson'] = json.loads(row['stegjson'])
+		
+		return submissions
 
 	async def saveQualifier(self, plyId: int, tourneyId: int, stegDict: dict) -> bool:
 		quuid = uuid.uuid1()

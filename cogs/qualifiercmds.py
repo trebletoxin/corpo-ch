@@ -1,4 +1,4 @@
-import platform, json, base64
+import platform, json, base64, io
 from datetime import datetime
 
 import discord
@@ -112,13 +112,37 @@ class QualifierCmds(commands.Cog):
 
 	qualifier = discord.SlashCommandGroup('qualifier','Clone Hero Tournament Qualifer Commands')
 
-	@qualifier.command(name='submit',description='Submit a qualifier score for a tournament this server is running', integration_types={discord.IntegrationType.guild_install})
+	@qualifier.command(name='submit', description='Submit a qualifier score for a tournament this server is running', integration_types={discord.IntegrationType.guild_install})
 	@discord.option("submission", discord.Attachment, description="Attach in-game screenshot of qualifer run", required=True)
 	async def qualifierSubmitCmd(self, ctx, submission: discord.Attachment):
 		view = DiscordQualifierView(ctx, self.bot.tourneyDB, self.chUtils, submission)
 		ret = await view.init(ctx)	
 		await view.wait()
 		view.stop()
+	
+	@qualifier.command(name='submissions', description='Retrieve a CSV of all submissions for the active tournament', integration_types={discord.IntegrationType.guild_install})
+	async def qualifierCSVCmd(self, ctx):
+		# pull data
+		tourney = self.bot.tourneyDB.getActiveTournies(ctx.guild.id)
+		if type(tourney) == dict:
+			tourneyId = tourney.id
+		else: # no active tourney found
+			await ctx.respond("No active tournament was found.",ephemeral=True)
+			return
+		
+		submissions = self.bot.tourneyDB.getTourneyQualifierSubmissions(tourney.id)
+
+		# format data
+		csv = "Player,Score,Notes Missed,Overstrums,Ghosts\n"
+		for i in submissions:
+			csv += f"{i.profile_name},{i.score},{i.notes_hit},{i.total_notes - i.notes_hit},{i.overstrums},{i.frets_ghosted}\n"
+
+		# post data
+		csvF = io.StringIO()
+		csvF.write(csv)
+		await ctx.respond(file=csvF,ephemeral=True)
+		csvF.close()
 
 def setup(bot):
 	bot.add_cog(QualifierCmds(bot))
+
