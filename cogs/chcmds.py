@@ -61,7 +61,7 @@ class CHOptModal(Modal):
 			return
 		else:
 			retData['speed'] = int(self.children[2].value)
-		
+
 		await interaction.response.defer(invisible=True)
 		self.choptOpts = retData
 		self.stop()
@@ -114,6 +114,7 @@ class Path():
 		self.ctx = ctx
 		self.user = ctx.user
 		self.chUtils = chutils.CHUtils()
+		self.outputPath = True
 		self.searchData = None
 		self.numCharts = -1
 		self.selection = -1
@@ -133,7 +134,7 @@ class Path():
 			await self.hide()
 			return
 
-		outPng = self.chUtils.CHOpt(sngUuid, self.choptOpts)
+		outPng = self.chUtils.CHOpt(sngUuid, self.choptOpts, self.outputPath)
 		if not outPng:
 			await interaction.followup.send(f"Path generation died on CHOpt call. SNG UUID: {sngUuid}", ephemeral=True)
 			await self.hide()
@@ -171,7 +172,8 @@ class Path():
 
 		embed.add_field(name="Search Results", value=chartListing, inline=False)
 		if self.numCharts > 0:
-			embed.add_field(name="Current CHOpt Options", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%")
+			embed.add_field(name="Current CHOpt Options", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%", inline = False)
+			embed.add_field(name="Output Path", value=f"If set to false, will only provide the chart image for manual markup. Use 'Blank Path' button to switch\n**{self.outputPath}**", inline = False)
 
 		return embed
 
@@ -184,7 +186,8 @@ class Path():
 		embed.set_thumbnail(url=url)
 		embed.add_field(name="CHOpt Path For", value=f"{theSong["name"]} - {theSong["artist"]} - {theSong["album"]} - {theSong["charter"]}", inline=False)
 		embed.add_field(name="CHOpt Options Used", value=f"Early Whammy: {self.choptOpts['whammy']}%\nSqueeze: {self.choptOpts['squeeze']}%\nSong Speed: {self.choptOpts['speed']}%", inline=False)
-		embed.add_field(name="Image Link", value=f"[Link to Image]({url})")
+		embed.add_field(name="Path shown", value=f"**{self.outputPath}**", inline=False)
+		embed.add_field(name="Image Link", value=f"[Link to Image]({url})", inline=False)
 		return embed
 
 	def cleanup(self, sngUuid, outPng):
@@ -200,6 +203,7 @@ class PathView(discord.ui.View):
 		if not doneSearch or self.path.numCharts < 1:
 			self.get_item('submit').disabled = True
 			self.get_item('chopts').disabled = True
+			self.get_item('blankpath').disabled = True
 
 	@discord.ui.button(label="Cancel", style=discord.ButtonStyle.red)
 	async def cancelBtn(self, button, interaction: discord.Interaction):
@@ -211,6 +215,12 @@ class PathView(discord.ui.View):
 		modal = EncoreModal(self.path, title="Encore search for chart")
 		await interaction.response.send_modal(modal)
 		await modal.wait()
+		await self.path.show()
+
+	@discord.ui.button(label="Blank Path", style=discord.ButtonStyle.secondary, custom_id="blankpath")
+	async def switchPathOutput(self, button, interaction: discord.Interaction):
+		self.path.outputPath = not self.path.outputPath
+		await interaction.response.defer(invisible=True)
 		await self.path.show()
 
 	@discord.ui.button(label='CHOpt Options', style=discord.ButtonStyle.secondary, custom_id="chopts")
