@@ -104,7 +104,6 @@ class CHUtils():
 
 	def getOverStrums(self, imageName: str, roundData: dict) -> dict:
 		outStr = pytesseract.image_to_string(Image.open(imageName))
-
 		osCnt = re.findall("(?<=Overstrums )([0-9]+)", outStr)
 		print(f"OS Counts: {osCnt}")
 		#Sanity check OS's before adding
@@ -128,6 +127,7 @@ class CHUtils():
 				#Notes missed isn't explicitly in steg :shrug:
 				for i, player in enumerate(output['players']):
 					player["notes_missed"] = player["total_notes"] - player['notes_hit']
+
 			else:
 				print(f"Error returned from steg tool, usually invalid chart: [ {" ".join(proc.args)} ] - {proc.stderr.decode("utf-8")}")
 				os.remove(imageName)

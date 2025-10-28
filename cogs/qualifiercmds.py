@@ -34,7 +34,6 @@ class DiscordQualifierView(discord.ui.View):
 		self.tourney = await self.sql.getActiveTournies(self.ctx.guild.id)
 		qualifiers = await self.sql.getActiveQualifiers(self.ctx.guild.id)
 
-
 		if len(qualifiers) > 1:
 			await self.ctx.respond("I'm not configured to support multiple qualifiers in a tournament - Notifiy my devs for help", ephemeral=True)		
 			return False
@@ -169,27 +168,27 @@ class QualifierCmds(commands.Cog):
 		view = DiscordQualifierView(ctx, self.bot.tourneyDB, self.chUtils, None)
 		await view.init(viewInit=False, showRules=True)
 
-	@qualifier.command(name='submissions', description='Retrieve a CSV of all submissions for the active tournament', integration_types={discord.IntegrationType.guild_install})
-	async def qualifierCSVCmd(self, ctx):
+	#Keep as a fail-safe - if gsheets submissions breaks, this can be used for data pull - just doesn't have a restriction for staff-role only execution
+	#@qualifier.command(name='submissions', description='Retrieve a CSV of all submissions for the active tournament', integration_types={discord.IntegrationType.guild_install})
+	#async def qualifierCSVCmd(self, ctx):
 		# pull data
-		tourney = self.bot.tourneyDB.getActiveTournies(ctx.guild.id)
-		if type(tourney) != dict: # no active tourney found
-			await ctx.respond("No active tournament was found.",ephemeral=True)
-			return
+		#tourney = self.bot.tourneyDB.getActiveTournies(ctx.guild.id)
+		#if type(tourney) != dict: # no active tourney found
+			#await ctx.respond("No active tournament was found.",ephemeral=True)
+			#return
 		
-		submissions = self.bot.tourneyDB.getTourneyQualifierSubmissions(tourney.id)
+		#submissions = self.bot.tourneyDB.getTourneyQualifierSubmissions(tourney.id)
 
 		# format data
-		csv = "Player,Score,Notes Missed,Overstrums,Ghosts\n"
-		for i in submissions:
-			csv += f"{i["profile_name"]},{i["score"]},{i["notes_hit"]},{i["total_notes"] - i["notes_hit"]},{i["overstrums"]},{i["frets_ghosted"]}\n"
+		#csv = "Player,Score,Notes Missed,Overstrums,Ghosts\n"
+		#for i in submissions:
+			#csv += f"{i["profile_name"]},{i["score"]},{i["notes_hit"]},{i["total_notes"] - i["notes_hit"]},{i["overstrums"]},{i["frets_ghosted"]}\n"
 
 		# post data
-		csvF = io.StringIO()
-		csvF.write(csv)
-		await ctx.respond(file=discord.File(csvF,filename="qualifier_submissions.csv"),ephemeral=True)
-		csvF.close()
+		#csvF = io.StringIO()
+		#csvF.write(csv)
+		#await ctx.respond(file=discord.File(csvF,filename="qualifier_submissions.csv"),ephemeral=True)
+		#csvF.close()
 
 def setup(bot):
 	bot.add_cog(QualifierCmds(bot))
-
