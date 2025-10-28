@@ -1,5 +1,8 @@
 bot.json
+gsheets-key.json
 *.png
+*.err
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

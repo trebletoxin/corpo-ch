@@ -16,7 +16,7 @@ client = discord.Bot(intents=intents, chunk_guilds_at_startup=False)
 
 # cogs
 cogList = [
-	'fun',
+	#'fun',
 	'chcmds',
 	#'tourneycmds',
 	'qualifiercmds'
@@ -44,6 +44,15 @@ def loadConfig():
 		if not configData['token']:
 			print("No DBOT_TOKEN env var found. Quitting.")
 			quit(1)
+
+def startUpLogging():
+	if configData.get('output_to_log'):
+		os.makedirs(f"{dirname}/logs", exist_ok=True)
+
+		sys.stdout = open(f"{dirname}/logs/discordbot.log", 'a+')
+		sys.stdout.reconfigure(line_buffering = True)  # Flush stdout at every newline
+
+		sys.stderr = open(f"{dirname}/logs/discordbot.err", 'a+')
 
 def startUpDB():
 	global configData, mysqlHandler, client
@@ -106,6 +115,7 @@ async def on_ready():
 	doneStartup = True
 
 loadConfig()
+startUpLogging()
 startUpDB()
 print(f"--- Starting up at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())} ---")
 print('Logging into discord')

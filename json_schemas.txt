@@ -31,12 +31,13 @@
 			"checksum" : "DEADBEEF",
 			"chart_link" : "https://drive.google.com",
 			"end" : TIMESTAMP,
+			"form_link" : "https://drive.google.com"
 		}
 	]
 }
 
 
-{ "qualifiers" : [ { "uuid" : "95de7d5a-b2af-11f0-b81c-0050569d2030", "rules" : "Please read the rules at https://discord.com/channels/1414088320501416099/1429887779655122975/1431719824890920971", "checksum" : "5A01B0EA8F4BBAE7C14ED44857FEE44E", "chart_link" : "https://drive.google.com/file/d/1rlyVd0ICtfS1vSORjr5b-HnycKB3uHsz/view?usp=sharing", "end" : 2025-10-28 18:08:46.963130+00:00, "single_submission" : true } ] }
+{ "qualifiers" : [ { "uuid" : "95de7d5a-b2af-11f0-b81c-0050569d2030", "rules" : "This qualifier must be ran at the time specified in the Google Form submitted to run this qualifier. The form must have been submitted at LEAST 48 hours before submitting this qualifier.$$You have 30 minutes from the time specified in the form to finish the qualifier. The time that is contained in the screenshot will be used to verify the run was done in this window.", "checksum" : "5A01B0EA8F4BBAE7C14ED44857FEE44E", "chart_link" : "https://drive.google.com/file/d/1rlyVd0ICtfS1vSORjr5b-HnycKB3uHsz/view?usp=sharing", "end" : "2025-10-30 00:00:00.00000+00:00", "single_submission" : true, "form_link" : "https://docs.google.com/forms/d/e/1FAIpQLSerrnm1fRlelMfr9euUJlAA3w0lGFW0bwAHmI90Sg5PPYuMfg/viewform" } ] }
 
 { "name" : "BWS 2025", "rules" : "Please read the rules here: https://discord.com/channels/1414088320501416099/1415107226695237633/1415107324074393642" }
 
