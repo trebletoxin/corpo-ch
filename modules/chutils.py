@@ -129,6 +129,7 @@ class CHUtils():
 				player['overstrums'] = '-'
 
 	async def getStegInfo(self, image: File) -> dict:
+		image.filename = re.sub(r'[^a-zA-Z0-9-_.]', '', image.filename)
 		imageName = f"{self.stegCliInput}/{image.filename}"
 		print(f"Steg Input PNG: {imageName}")
 		await image.save(imageName, seek_begin=True)
@@ -138,10 +139,10 @@ class CHUtils():
 			proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 			if proc.returncode != 0 or proc.returncode != '0':
 				output = json.loads(proc.stdout.decode("utf-8"))
-
+				output['charter_name'] = re.sub(r"(?:<[^>]*>)", "", output['charter_name'])
 				#populate data not present in steg
 				self.getOverStrums(imageName, output)
-				output['image_name'] = re.sub(r'[^a-zA-Z0-9-_.]', '', image.filename)
+				output['image_name'] = image.filename
 				#Notes missed isn't explicitly in steg :shrug:
 				for i, player in enumerate(output['players']):
 					player["notes_missed"] = player["total_notes"] - player['notes_hit']

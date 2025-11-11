@@ -124,7 +124,6 @@ class TourneyDB():
 
 	async def saveQualifier(self, plyId: int, tourneyId: int, stegDict: dict) -> bool:
 		quuid = uuid.uuid1()
-		stegDict['charter_name'] = re.sub(r"(?:<[^>]*>)", "", stegDict['charter_name'])
 		storeJson = json.dumps(stegDict)
 
 		try:

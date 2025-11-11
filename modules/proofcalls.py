@@ -78,19 +78,20 @@ class ProofCalls():
 				await self.sql.replaceRefToolMatch(match['matchuuid'], tourney['id'], True, match['matchjson'], newThr.id)
 
 	async def postProofCall(self, tourney: dict, channel: discord.ForumChannel, match: dict):
-		print(f"Posting proof call for {tourney['config']['name']} match {match['matchjson']['highSeed']['name']} - {match['matchjson']['lowSeed']['name']}")
-		ply1 = await self.sql.getPlayerByCHName(match['matchjson']['highSeed']['name'], tourney['id'])
-		ply2 = await self.sql.getPlayerByCHName(match['matchjson']['lowSeed']['name'], tourney['id'])
+		matchJson = match['matchjson']
+		print(f"Posting proof call for {tourney['config']['name']} match {matchJson['highSeed']['name']} - {matchJson['lowSeed']['name']}")
+		ply1 = await self.sql.getPlayerByCHName(matchJson['highSeed']['name'], tourney['id'])
+		ply2 = await self.sql.getPlayerByCHName(matchJson['lowSeed']['name'], tourney['id'])
 
 		if ply1 != None:
 			ply1 = await self.bot.fetch_user(ply1['discordid'])
 		else:
-			print(f"Error finding {tourney['name']} player {match['matchjson']['highSeed']['name']}!")
+			print(f"Error finding {tourney['name']} player {matchJson['highSeed']['name']}!")
 
 		if ply2 != None:
 			ply2 = await self.bot.fetch_user(ply2['discordid'])
 		else:
-			print(f"Error finding {tourney['name']} player {match['matchjson']['lowSeed']['name']}!")
+			print(f"Error finding {tourney['name']} player {matchJson['lowSeed']['name']}!")
 
 		#Sanely get the message to pass in, silly threads
 		thread = await channel.create_thread(name=f"Proof call: {ply1.name} vs {ply2.name}!", content=f"Setting up! - Paging {ply1.mention} and {ply2.mention} for screenshots!")
@@ -100,8 +101,9 @@ class ProofCalls():
 		return thread
 
 	async def addScreenshots(self, msg: discord.Message, tourney: dict, match: dict, screens: list) -> bool: #Bool if match is complete
-		ply1Db = await self.sql.getPlayerByCHName(match['matchjson']['highSeed']['name'], tourney['id'])
-		ply2Db = await self.sql.getPlayerByCHName(match['matchjson']['lowSeed']['name'], tourney['id'])
+		matchJson = match['matchjson']
+		ply1Db = await self.sql.getPlayerByCHName(matchJson['highSeed']['name'], tourney['id'])
+		ply2Db = await self.sql.getPlayerByCHName(matchJson['lowSeed']['name'], tourney['id'])
 
 		for screen in screens:
 			stegData = await self.chUtils.getStegInfo(screen)
@@ -109,7 +111,7 @@ class ProofCalls():
 				print(f"Invalid steg data: {stegData['image_name']}")
 				continue
 
-			chartInfo = tourney['brackets'][match['matchjson']['setlist']]['set_list'][stegData['song_name']]
+			chartInfo = tourney['brackets'][matchJson['setlist']]['set_list'][stegData['song_name']]
 			if chartInfo['checksum'] == stegData['checksum']:
 				plysMatched = 0
 				for ply in stegData['players']:
@@ -128,34 +130,35 @@ class ProofCalls():
 				print(f"Screenshot {stegData['image_name']} not using correct chart")
 				continue
 
-			if 'tb' in match['matchjson'] and match['matchjson']['tb']['song'] == stegData['song_name']:
+			if 'tb' in matchJson and matchJson['tb']['song'] == stegData['song_name']:
 				print(f"Adding TB {stegData['song_name']}")
-				match['matchjson']['tb']['steg_data'] = stegData
+				matchJson['tb']['steg_data'] = stegData
 			else:
-				for song in match['matchjson']['rounds']:
+				for song in matchJson['rounds']:
 					if song['song'] == stegData['song_name']:
 						print(f"Adding {stegData['song_name']}")
 						song['steg_data'] = stegData
 						break
 
-		successes = sum([1 for d in match['matchjson']['rounds'] if 'steg_data' in d]) + 1 if 'tb' in match['matchjson'] else 0
-		needed = len(match['matchjson']['rounds']) if "tb" not in match['matchjson'] else len(match['matchjson']['rounds']) + 1
+		successes = sum([1 for d in matchJson['rounds'] if 'steg_data' in d]) + 1 if 'tb' in matchJson else 0
+		needed = len(matchJson['rounds']) if "tb" not in matchJson else len(matchJson['rounds']) + 1
 		if needed == successes:
 			print(f"Match {match['matchuuid']} complete!")
-			await self.sql.saveCompleteMatch(match['matchuuid'], match['tourneyid'], match['matchjson']['highSeed']['name'], match['matchjson']['lowSeed']['name'], match['matchjson'])
+			await self.sql.saveCompleteMatch(match['matchuuid'], match['tourneyid'], matchJson['highSeed']['name'], matchJson['lowSeed']['name'], matchJson)
 			await msg.edit(content=f"Match Complete!", embed=self.makeProofEmbed(tourney, match), view=None)
 			channel = self.bot.get_channel(tourney['config']['proof_channel'])
 			thread = channel.get_thread(msg.id)
 			await thread.archive(locked=True)
 		else:
-			await self.sql.replaceRefToolMatch(match['matchuuid'], match['tourneyid'], True, match['matchjson'], msg.id)
+			await self.sql.replaceRefToolMatch(match['matchuuid'], match['tourneyid'], True, matchJson, msg.id)
 			await msg.edit(embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, msg, tourney, match))
 
 	def makeProofEmbed(self, tourney: dict, match: dict) -> discord.Embed:
+		matchJson = match['matchjson']
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.set_footer(text=f"UUID: {match['matchuuid']}")
-		ply1 = match['matchjson']['highSeed']
-		ply2 = match['matchjson']['lowSeed']
+		ply1 = matchJson['highSeed']
+		ply2 = matchJson['lowSeed']
 		embed.title = f"{tourney['config']['name']} - {ply1['name']}:{ply1['seed']} vs {ply2['name']}:{ply2['seed']}"
 
 		banStr = f"**{ply1['name']} Bans**\n"
@@ -168,13 +171,13 @@ class ProofCalls():
 
 		embed.add_field(name="Bans", value=banStr, inline=False)
 		rndStr = ""
-		for rnd in match['matchjson']['rounds']:
+		for rnd in matchJson['rounds']:
 				rndStr += f"{rnd['pick']} picks {rnd['song']} - {rnd['winner']} wins\n\n"
 
-		if 'tb' in match['matchjson']:
-			rndStr += f"TIEBREAKER - {match['matchjson']['tb']['song']} - {match['matchjson']['tb']['winner']} wins!\n\n"
+		if 'tb' in matchJson:
+			rndStr += f"TIEBREAKER - {matchJson['tb']['song']} - {matchJson['tb']['winner']} wins!\n\n"
 
-		if match['matchjson']['winner'] == 0:
+		if matchJson['winner'] == 0:
 			rndStr += f"{ply1['name']} wins the match!"
 		else:
 			rndStr += f"{ply2['name']} wins the match!"
@@ -183,17 +186,17 @@ class ProofCalls():
 
 		missingStr = ""
 		successStr = ""
-		for song in match['matchjson']['rounds']:
+		for song in matchJson['rounds']:
 			if 'steg_data' in song:
 				successStr += f"{song['song']}\n"
 			else:
 				missingStr += f"{song['song']}\n"
 
-		if 'tb' in match['matchjson']:
-			if 'steg_data' in match['matchjson']['tb']:
-				successStr += f"{match['matchjson']['tb']['song']}"
+		if 'tb' in matchJson:
+			if 'steg_data' in matchJson['tb']:
+				successStr += f"{matchJson['tb']['song']}"
 			else:
-				missingStr += f"{match['matchjson']['tb']['song']}"
+				missingStr += f"{matchJson['tb']['song']}"
 
 		if successStr != "":
 			embed.add_field(name="Received Screens", value=successStr, inline=False)
