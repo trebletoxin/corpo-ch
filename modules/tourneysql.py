@@ -32,7 +32,8 @@ class TourneyDB():
 		qualiConf['qualifiers'][0]['rules'] = qualiConf['qualifiers'][0]['rules'].replace("$", "\n")
 		conf = json.loads(row['config'])
 		conf['rules'] = conf['rules'].replace("$", '\n')
-		return { 'id' : row['id'], 'config' : conf, 'qualifier_config' : qualiConf, 'brackets' : None }
+		brackets = json.loads(row['brackets']) if row['brackets'] != None else None
+		return { 'id' : row['id'], 'config' : conf, 'qualifier_config' : qualiConf, 'brackets' : brackets }
 
 	async def getTourneyBrackets(self, tid: int) -> dict:
 		async with self.sqlBroker.context() as sql:
@@ -102,6 +103,15 @@ class TourneyDB():
 
 		return row
 
+	async def getPlayerByCHName(self, chName: str, tourneyId: int) -> dict:
+		async with self.sqlBroker.context() as sql:
+			row = await sql.query_first("SELECT * FROM players WHERE (chname = %s) AND (tourneyid = %s)", (chName, tourneyId))
+
+		if row is not None:
+			row['config'] = json.loads(row['config']) if row['config'] != None else None
+
+		return row
+
 	async def getTourneyQualifierSubmissions(self, tourneyId: int) -> list:
 		async with self.sqlBroker.context() as sql:
 			submissions = await sql.query("SELECT * FROM qualifiers WHERE (tourneyid = {%s})", (tourneyId, ))
@@ -120,12 +130,59 @@ class TourneyDB():
 		try:
 			async with self.sqlBroker.context() as sql:
 				await sql.query('INSERT INTO qualifiers (qualiuuid, discordid, tourneyid, stegjson) VALUES (%s, %s, %s, %s)', (quuid, plyId, tourneyId, storeJson, ))
-				await sql.query('INSERT INTO players (discordid, chname, tourneyid, qualifierid ) VALUES (%s, %s, %s, %s)', (plyId, stegDict['players'][0]['profile_name'], tourneyId, quuid, ))
+				await sql.query('INSERT INTO players (discordid, chname, tourneyid, qualifierid) VALUES (%s, %s, %s, %s)', (plyId, stegDict['players'][0]['profile_name'], tourneyId, quuid, ))
 
 			return True
 		except Exception as e:
 			print(f"Error saving player data: {e}")
 			return False
+
+	async def getRefToolMatch(self, matchuuid: str) -> dict:
+		async with self.sqlBroker.context() as sql:
+			row = await sql.query_first("SELECT * FROM reftool_matches WHERE (matchuuid = %s)", (matchuuid, ))
+
+		row['matchjson'] = json.loads(row['matchjson']) if row['matchjson'] != None else None
+		row['received_screens'] = json.loads(row['received_screens']) if row['received_screens'] != None else None
+		return row
+
+	async def saveCompleteMatch(self, matchuuid: str, tid: int, ply1: str, ply2: str, matchJson: dict):
+		storeJson = json.dumps(matchJson)
+
+		async with self.sqlBroker.context() as sql:
+			await sql.query("INSERT INTO completed_matches (matchuuid, tourneyid, ply1, ply2, matchjson) VALUES (%s, %s, %s, %s, %s)", (matchuuid, tid, ply1, ply2, storeJson, ))
+			await sql.query("DELETE FROM reftool_matches WHERE matchuuid = %s", (matchuuid, ))
+
+	async def replaceRefToolMatch(self, matchuuid: str, tid: int, finished: bool, refToolJson: dict, postid=None):
+		match = json.dumps(refToolJson)
+
+		async with self.sqlBroker.context() as sql:
+			await sql.query("REPLACE INTO reftool_matches (matchuuid, tourneyid, finished, postid, matchjson) VALUES (%s, %s, %s, %s, %s)", (matchuuid, tid, finished, postid, match, ))
+
+	async def getActiveProofCalls(self) -> dict:
+		async with self.sqlBroker.context() as sql:
+			matches = await sql.query("SELECT * FROM reftool_matches")
+
+		for row in matches:
+			if row is not None:
+				row['matchjson'] = json.loads(row['matchjson']) if row['matchjson'] != None else None
+
+		return matches
+
+	async def getProofCall(self, matchUuid: str) -> dict:
+		async with self.sqlBroker.context() as sql:
+			row = await sql.query_first("SELECT * FROM reftool_matches WHERE (matchuuid = %s)", (matchuuid, ))
+
+		row['matchjson'] = json.loads(row['matchjson'])
+		row['received_screens'] = json.loads(row['received_screens'])
+
+		return row
+
+	async def setProofCall(self, matchUuid: str, tid: int, finished: bool, msg: discord.Message, matchJson: dict, screens: dict):
+		mjson = json.dumps(matchJson)
+		rscreens = json.dumps(screens)
+
+		async with self.sqlBroker.context() as sql:
+			await sql.query_first("REPLACE INTO reftool_matches (matchuuid, tourneyid, finished, postid, matchjson, received_screens) VALUES (%s, %s, %s, %s, %s %s)", (matchuuid, tid, finished, msg.id, mjson, rscreens, ))
 
 	## Discord Match Ref Tool Helpers
 	async def saveMatch(self, match):

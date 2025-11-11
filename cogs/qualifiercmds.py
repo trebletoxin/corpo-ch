@@ -81,7 +81,7 @@ class DiscordQualifierView(discord.ui.View):
 			#Needs to be tweaked to support multiplayer qualifier runs
 			print(f"Submitting qualifier submission for {self.ctx.user.global_name} - {self.stegData["players"][0]["profile_name"]} - {self.stegData['score_timestamp']}")
 			#Save Screenshot
-			outDir = f"steg/tournies/{self.tourney['config']['name']}".replace(" ", "")
+			outDir = f"steg/qualifiers/{self.tourney['config']['name']}".replace(" ", "")
 			if not os.path.isdir(outDir):
 				os.makedirs(outDir)
 

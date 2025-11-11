@@ -1,182 +1,209 @@
 #These are just notes for various json schema's/test data used in the DB
 
-#tournies - brackets
-{
-	"brackets" : [ 
-		"uuid.uuid()" : { #(?) For if tournie has more than 1 qualifier - Ex LPC2
-			"bracket_name" : "BWS 2025 Main Bracket",
-			"set_list" ; [
-				"song_name" : "Song title",
-				"chart_checksum" : "DEADBEEF",
-				"charter" : "Chezy",
-				"album" : "Your Album",
-				"artist" : "The Artist"
-			]
-		}
-	],
-}
-
 #tournies - config
 {
-	"name" : "Tourney Name",
-	"rules" : "Rules text/link"
+	"name" : "BWS 2025",
+	"rules" : "Please read the rules here: https://discord.com/channels/1414088320501416099/1415107226695237633/1415107324074393642",
+	"disable_gsheets" : true,
+	"ref_role" : 1437445176187420672,
+	"proof_channel" : 1432466136938844221
 }
 
 #tournies - qualifierconfig
 {
 	"qualifiers" : [
 		{
-			"uuid" : uuid.uuid(),
-			"rules" : "Rules text/link"
-			"checksum" : "DEADBEEF",
-			"chart_link" : "https://drive.google.com",
-			"end" : TIMESTAMP,
-			"form_link" : "https://drive.google.com"
+			"uuid" : "95de7d5a-b2af-11f0-b81c-0050569d2030",
+			"rules" : "This qualifier must be ran at the time specified in the Google Form submitted to run this qualifier. The form must have been submitted at LEAST 48 hours before submitting this qualifier.$$You have 30 minutes from the time specified in the form to finish the qualifier. The time that is contained in the screenshot will be used to verify the run was done in this window.",
+			"checksum" : "5A01B0EA8F4BBAE7C14ED44857FEE44E",
+			"chart_link" : "https://drive.google.com/file/d/1rlyVd0ICtfS1vSORjr5b-HnycKB3uHsz/view?usp=sharing",
+			"end" : "2025-11-08 00:14:12.00000+00:00",
+			"single_submission" : true,
+			"form_link" : "https://docs.google.com/forms/d/e/1FAIpQLSerrnm1fRlelMfr9euUJlAA3w0lGFW0bwAHmI90Sg5PPYuMfg/viewform"
 		}
 	]
 }
 
-
-{ "qualifiers" : [ { "uuid" : "95de7d5a-b2af-11f0-b81c-0050569d2030", "rules" : "This qualifier must be ran at the time specified in the Google Form submitted to run this qualifier. The form must have been submitted at LEAST 48 hours before submitting this qualifier.$$You have 30 minutes from the time specified in the form to finish the qualifier. The time that is contained in the screenshot will be used to verify the run was done in this window.", "checksum" : "5A01B0EA8F4BBAE7C14ED44857FEE44E", "chart_link" : "https://drive.google.com/file/d/1rlyVd0ICtfS1vSORjr5b-HnycKB3uHsz/view?usp=sharing", "end" : "2025-10-30 00:00:00.00000+00:00", "single_submission" : true, "form_link" : "https://docs.google.com/forms/d/e/1FAIpQLSerrnm1fRlelMfr9euUJlAA3w0lGFW0bwAHmI90Sg5PPYuMfg/viewform" } ] }
-
-{ "name" : "BWS 2025", "rules" : "Please read the rules here: https://discord.com/channels/1414088320501416099/1415107226695237633/1415107324074393642" }
-
+#tournies - brackets config - leaving setlist dict as set_list -> dict for potential to add rules (IE Gamepad mode allowed/required k/v's)
 {
-	"brackets" : [ 
-		{ 
-			"bracket_name" : "BWS 2025 Main Bracket",
-			"set_list" ; [
-				{
-					"song_name" : "Song title",
-					"chart_checksum" : "DEADBEEF",
-					"charter" : "Chezy",
-					"album" : "Your Album",
-					"artist" : "The Artist",
-				}
-			]
+	"BWS 2025 - Main Bracket": {
+		"set_list": {
+			"Spurgatory / Game Over": {
+				"checksum": "D47BF930569C7254728584708F04ED74",
+				"charter": "Miscellany",
+				"modifiers": ["NoModifiers"],
+				"speed": 100,
+				"category": "True Hybrid",
+				"album": "Terror Hungry",
+				"artist": "Lost Society"
+			},
+			"Orb of the Moons": {
+				"checksum": "36F8BE23DB5B2C4C020AFE9E97DF5AB7",
+				"charter": "Jackie",
+				"modifiers": ["NoModifiers"],
+				"speed": 115,
+				"category": "True Hybrid",
+				"album": "Far Beyond the Stars",
+				"artist": "Ascension"
+			},
+			"SPIRALING": {
+				"checksum": "6202724B6C98445F896E658BE7F08B46",
+				"charter": "Pix_",
+				"modifiers": ["Double Notes","Dropless Sustains"],
+				"speed": 200,
+				"category": "Solo Patterns",
+				"album": "CRUSHCORE",
+				"artist": "OMNIPONY"
+			},
+			"Lizzards": {
+				"checksum": "96340E0A469F88E881F8505EDC8D2731",
+				"charter": "Chemfinal",
+				"modifiers": ["NoModifiers"],
+				"speed": 100,
+				"category": "Solo One-Handing",
+				"album": "Lizzards",
+				"artist": "Scott Mishoe"
+			},
+			"Silence Followed by a Deafening Roar": {
+				"checksum": "B3DBE4A4F184368F09D955D6628BE156",
+				"charter": "Peddy",
+				"modifiers": ["NoModifiers"],
+				"speed": 100,
+				"category": "Solo Tech",
+				"album": "Silence Followed by a Deafening Roar",
+				"artist": "Paul Gilbert"
+			},
+			"Interdisciplinary Sectarism": {
+				"checksum": "40FAE5CB210E6F6B1781089134267CA9",
+				"charter": "OHM",
+				"modifiers": ["NoModifiers"],
+				"speed": 100,
+				"category": "Strum Speed",
+				"album": "Erstwhile Befell",
+				"artist": "Shadow of Darkness"
+			},
+			"TWO-TORIAL": {
+				"checksum": "7773C115AC7AD940AD268E1C2F2D7D51",
+				"charter": "Stargazer",
+				"modifiers": ["All Strums"],
+				"speed": 100,
+				"category": "Strum Control",
+				"album": "Dimension Gates Ω -Phase.2-",
+				"artist": "PHQUASE vs DJ TOTTO"
+			},
+			"Monsoon": {
+				"checksum": "070C010F6C27BC72F409F108E7319AC6",
+				"charter": "Neversoft",
+				"modifiers": ["Note Shuffle","Double Notes"],
+				"speed": 110,
+				"category": "Chord Tech",
+				"album": "Schrei",
+				"artist": "Tokio Hotel"
+			},
+			"Impulse": {
+				"checksum": "9F26C0599EB6EB1F49E8F7210D69B136",
+				"charter": "EvaCH",
+				"modifiers": ["NoModifiers"],
+				"speed": 110,
+				"category": "Pure Pathing",
+				"album": "Ameliorate",
+				"artist": "An Endless Sporadic"
+			},
+			"Lights Camera Action": {
+				"checksum": "2DA168ECA52C783E392BA7D439BA9F44",
+				"charter": "Aren Eternal & Jackie",
+				"modifiers": ["Brutal Mode"],
+				"speed": 100,
+				"category": "Pure Gimmick",
+				"album": "Sequence Break",
+				"artist": "meganeko"
+			},
+			"Xroniàl Xéro": {
+				"checksum": "E1760A880594C5C4AFBFF8F63894A5F7",
+				"charter": "Rek3dge, oriOta, Ziometry",
+				"modifiers": ["NoModifiers"],
+				"speed": 100,
+				"category": "Survival",
+				"album": "Xroniàl Xéro",
+				"artist": "Camellia"
+			}
 		}
-	],
-	"tourney_name" : "BWS 2025"
-	"tourney_rules" : "Text or link"
+	}
 }
 
-
+#Reftool JSON
 {
-	"brackets" : [ 
-		{ 
-			"bracket_name" : "BWS 2025 Main Bracket",
-			"set_list" ; [
-				{
-					"song_name" : "Spurgatory - Game Over",
-					"chart_checksum" : "D47BF930569C7254728584708F04ED74",
-					"charter" : "Miscellany",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Hybrid"
-					"album" : "Terror Hungry",
-					"artist" : "Lost Society",
-				},
-				{
-					"song_name" : "Orb of the Moons",
-					"chart_checksum" : "36F8BE23DB5B2C4C020AFE9E97DF5AB7",
-					"charter" : "Jackie",
-					"modifiers" : [],
-					"speed" : 115,
-					"category" : "Hybrid"
-					"album" : "Far Beyond the Stars",
-					"artist" : "Ascension",
-				},
-				{
-					"song_name" : "SPIRALING",
-					"chart_checksum" : "6202724B6C98445F896E658BE7F08B46",
-					"charter" : "Pix_",
-					"modifiers" : [ "Double Notes", "Dropless Sustains" ],
-					"speed" : 200,
-					"category" : "Solo"
-					"album" : "CRUSHCORE",
-					"artist" : "OMNIPONY",
-				},
-				{
-					"song_name" : "Lizzards",
-					"chart_checksum" : "96340E0A469F88E881F8505EDC8D2731",
-					"charter" : "Chemfinal",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Solo"
-					"album" : "Lizzards",
-					"artist" : "Scott Mishoe",
-				},
-				{
-					"song_name" : "Silence Followed by a Deafening Roar",
-					"chart_checksum" : "B3DBE4A4F184368F09D955D6628BE156",
-					"charter" : "Peddy",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Solo"
-					"album" : "Silence Followed by a Deafening Roar",
-					"artist" : "Paul Gilbert",
-				},
-				{
-					"song_name" : "Interdisciplinary Sectarism",
-					"chart_checksum" : "40FAE5CB210E6F6B1781089134267CA9",
-					"charter" : "OHM",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Strum"
-					"album" : "Erstwhile Befell",
-					"artist" : "Shadow of Darkness",
-				},
-				{
-					"song_name" : "TWO-TORIAL",
-					"chart_checksum" : "7773C115AC7AD940AD268E1C2F2D7D51",
-					"charter" : "Stargazer",
-					"modifiers" : [ "All Strums" ],
-					"speed" : 100,
-					"category" : "Strum"
-					"album" : "Dimension Gates Ω -Phase.2-",
-					"artist" : "PHQUASE vs DJ TOTTO",
-				},
-				{
-					"song_name" : "Monsoon",
-					"chart_checksum" : "070C010F6C27BC72F409F108E7319AC6",
-					"charter" : "Neversoft",
-					"modifiers" : [ "Note Shuffle", "Double Notes" ],
-					"speed" : 110,
-					"category" : "Strum"
-					"album" : "Schrei",
-					"artist" : "Tokio Hotel",
-				},
-				{
-					"song_name" : "Impulse",
-					"chart_checksum" : "9F26C0599EB6EB1F49E8F7210D69B136",
-					"charter" : "EvaCH",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Pathing"
-					"album" : "Ameliorate",
-					"artist" : "An Endless Sporadic",
-				},
-				{
-					"song_name" : "Lights Camera Action",
-					"chart_checksum" : "2DA168ECA52C783E392BA7D439BA9F44",
-					"charter" : "Aren Eternal & Jackie",
-					"modifiers" : [ "Brutal Mode" ],
-					"speed" : 100,
-					"category" : "Gimmick"
-					"album" : "Sequence Break",
-					"artist" : "meganeko",
-				},
-				{
-					"song_name" : "Xroniàl Xéro",
-					"chart_checksum" : "E1760A880594C5C4AFBFF8F63894A5F7",
-					"charter" : "Rek3dge, oriOta, Ziometry",
-					"modifiers" : [],
-					"speed" : 100,
-					"category" : "Survival"
-					"album" : "Xroniàl Xéro",
-					"artist" : "Camellia",
-				},
-			]
+	"defer": 0,
+	"group": "X",
+	"highSeed": {
+		"ban": [
+			"Monsoon",
+			"Spurgatory / Game Over"
+		],
+		"name": "[CORP] Woy",
+		"seed": "5",
+		"wins": "11"
+	},
+	"lowSeed": {
+		"ban": [
+			"Xroniàl Xéro",
+			"Lizzards"
+		],
+		"name": "[CORP] Jetsurf",
+		"seed": "10",
+		"wins": "10"
+	},
+	"rounds": [
+		{
+			"index": 1,
+			"pick": "[CORP] Woy",
+			"song": "Silence Followed By A Deafening Roar",
+			"winner": "[CORP] Woy"
+		},
+		{
+			"index": 2,
+			"pick": "[CORP] Jetsurf",
+			"song": "Interdisciplanary Sectarism",
+			"winner": "[CORP] Jetsurf"
+		},
+		{
+			"index": 3,
+			"pick": "[CORP] Woy",
+			"song": "TWO-TORIAL",
+			"winner": "[CORP] Jetsurf"
+		},
+		{
+			"index": 4,
+			"pick": "[CORP] Jetsurf",
+			"song": "SPIRALING",
+			"winner": "[CORP] Woy"
+		},
+		{
+			"index": 5,
+			"pick": "[CORP] Woy",
+			"song": "Orb of the Moons",
+			"winner": "[CORP] Woy"
+		},
+		{
+			"index": 6,
+			"pick": "[CORP] Jetsurf",
+			"song": "Lights Camera Action",
+			"winner": "[CORP] Jetsurf"
 		}
 	],
+	"setlist": "BWS 2025 - Main Bracket",
+	"songCount": "7",
+	"tb": { 
+		"index": 7,
+		"song": "Impulse",
+		"winner": "[CORP] Jetsurf"
+	},
+	"uuid": "3b0fc146-be43-11f0-9914-0050569d2030",
+	"winner": 0
+}
+
+{
+	'received_screens' : {
+			
+	}
 }

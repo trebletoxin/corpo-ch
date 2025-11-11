@@ -8,29 +8,46 @@ class TourneyConfigModal(Modal):
 	def __init__(self, sql, *args, **kwargs):
 		self.sql = sql
 		super().__init__(*args, **kwargs)
-		self.refToolInput = None
 		self.add_item(InputText(label="Tourney Config", style=discord.InputTextStyle.long, required=False))
 		self.add_item(InputText(label="Qualifier Config", style=discord.InputTextStyle.long, required=False))
 		self.add_item(InputText(label="Bracket Config", style=discord.InputTextStyle.long, required=False))
 
 	async def callback(self, interaction: discord.Interaction):
-		#await interaction.defer(ephemeral=True)
-
 		tourney = await self.sql.getActiveTournies(interaction.guild.id)
 		if tourney == None:
-			await interaction.response("No active tourney")
+			await interaction.respond("No active tourney")
 
 		for config in self.children:
-			if config.label is "Tourney Config" and config.value != "":
+			if config.label == "Tourney Config" and config.value != "":
 				await self.sql.setTourneyConfig(tourney['id'], json.loads(config.value))
 
-			if config.label is "Qualifier Config" and config.value != "":
+			if config.label == "Qualifier Config" and config.value != "":
 				await self.sql.setTourneyQualifiers(tourney['id'], json.loads(config.value))
 
-			if config.label is "Bracket Config" and config.value != "":
+			if config.label == "Bracket Config" and config.value != "":
 				await self.sql.setTourneyBrackets(tourney['id'], json.loads(config.value))		
 
-		await interaction.response.send_message("Set whatever you sent me :shrug:")
+		await interaction.respond("Set whatever you sent me :shrug:")
+		self.stop()
+
+class TourneyMatchInProcessModal(Modal):
+	def __init__(self, sql, *args, **kwargs):
+		self.sql = sql
+		super().__init__(*args, **kwargs)
+		self.add_item(InputText(label="UUID", style=discord.InputTextStyle.short, max_length=40, required=True))
+		self.add_item(InputText(label="TourneyID", style=discord.InputTextStyle.short, max_length=4, required=True))
+		self.add_item(InputText(label="Finished", style=discord.InputTextStyle.short, max_length=1, required=True, value=1))
+		self.add_item(InputText(label="Match/Reftool JSON", style=discord.InputTextStyle.long, required=True))
+		self.callback = self.callback
+
+	async def callback(self, interaction: discord.Interaction):
+		tourney = await self.sql.getActiveTournies(interaction.guild.id)
+		if tourney == None:
+			await interaction.followup.send("No active tourney")
+
+		await self.sql.replaceRefToolMatch(self.children[0].value, int(self.children[1].value), bool(self.children[2].value), json.loads(self.children[3].value))
+
+		await interaction.respond("Set whatever you sent me :shrug:")
 		self.stop()
 
 class OwnerCmds(commands.Cog):
@@ -44,7 +61,14 @@ class OwnerCmds(commands.Cog):
 	async def setTourney(self, ctx):
 		modal = TourneyConfigModal(self.bot.tourneyDB, title="Mindful of the 4000 limit!")
 		await ctx.send_modal(modal=modal)
-		await modal.wait()
+		#await modal.wait()
+
+	@owner.command(name='reftoolmatchadd', description='Submit a refmatch entry for testing', integration_types={discord.IntegrationType.guild_install})
+	@commands.is_owner()
+	async def setTourney(self, ctx):
+		modal = TourneyMatchInProcessModal(self.bot.tourneyDB, title="Reftool match add")
+		await ctx.send_modal(modal=modal)
+		#await modal.wait()
 
 	@commands.Cog.listener()
 	async def on_application_command_error(self, ctx: discord.ApplicationContext, error: discord.DiscordException):

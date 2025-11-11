@@ -13,6 +13,10 @@ class GSheets():
 
 	async def init(self) -> bool:
 		self.tourneyConf = await self.sql.getTourneyConfig(self.tid)
+
+		if "disable_gsheets" in self.tourneyConf and self.tourneyConf['disable_gsheets']:
+			return True #Use K/V in json config to disable sheets (dev env)
+
 		#Create Sheet
 		if "qualifier_sheet" not in self.tourneyConf:
 			try:
@@ -35,6 +39,9 @@ class GSheets():
 		return True
 
 	async def submitQualifier(self, user, qualifierData: dict):
+		if "disable_gsheets" in self.tourneyConf and self.tourneyConf['disable_gsheets']:
+			return True #Use K/V in json config to disable sheets (dev env)
+
 		chName = qualifierData['players'][0]['profile_name']
 		score = qualifierData['players'][0]['score']
 		missed = qualifierData['players'][0]['notes_missed']

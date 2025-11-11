@@ -1,11 +1,10 @@
-import subprocess, requests, sys, platform, uuid, json, os, operator, re
+import subprocess, requests, sys, platform, uuid, json, os, operator, re, cv2, pytesseract
 
 from PIL import Image, ImageEnhance
 from discord import File
 from datetime import datetime, timezone
-import pytesseract
+
 import discord
-import cv2
 
 class CHUtils():
 	def __init__(self):
@@ -113,20 +112,18 @@ class CHUtils():
 		thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
 
 		# Morph open to remove noise and invert image
-		kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
-		opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
-		invert = 255 - opening
-		img = Image.fromarray(invert)
+		#kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+		#opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+		#invert = 255 - opening
+		img = Image.fromarray(thresh)
 		osImg = img.crop((0, 690, 1080, 727))
 		outStr = pytesseract.image_to_string(osImg)
-		#, lang='eng', config='--psm 4 --user-patterns steg/user-patterns.txt')
-		print(f"Outstr: {outStr}")
 		osCnt = re.findall("(?<=Overstrums )([0-9]+)", outStr)
-		print(f"OS Counts: {osCnt}")
+
 		#Sanity check OS's before adding
 		for i, player in enumerate(roundData['players']):
 			## TODO: THIS NEEDS TO BE FIXED FOR ACTUAL ROUND DATA INFO
-			if len(osCnt) > 0:
+			if len(osCnt) == len(roundData['players']):
 				player['overstrums'] = osCnt[i]
 			else:
 				player['overstrums'] = '-'
@@ -141,10 +138,11 @@ class CHUtils():
 			proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
 			if proc.returncode != 0 or proc.returncode != '0':
 				output = json.loads(proc.stdout.decode("utf-8"))
-				print(f"STEGOUTPUT: {output}")
+
 				#populate data not present in steg
 				self.getOverStrums(imageName, output)
-				output['image_name'] = image.filename
+				output['image_name'] = re.sub(r'[^a-zA-Z0-9-_]', '', image.filename)
+				print(f"Santized imagename: {output['image_name']}")
 				#Notes missed isn't explicitly in steg :shrug:
 				for i, player in enumerate(output['players']):
 					player["notes_missed"] = player["total_notes"] - player['notes_hit']

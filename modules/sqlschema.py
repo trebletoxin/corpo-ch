@@ -104,21 +104,53 @@ class MysqlSchema():
 			await self.sqlBroker.c_commit(cur)
 
 		if not await self.sqlBroker.hasTable(cur, 'match_views'):
-			print("[MysqlSchema] Creating table 'matche_views'...")
+			print("[MysqlSchema] Creating table 'match_views'...")
 			await cur.execute(
 			"""	
 			CREATE TABLE match_views (
 			matchid INT AUTO_INCREMENT NOT NULL,
 			channelid BIGINT UNSIGNED NOT NULL,
 			messageid BIGINT UNSIGNED NOT NULL,
-			matchjson TEXT NULL, PRIMARY KEY (matchid)
+			matchjson TEXT NULL,
+			PRIMARY KEY (matchid)
+			) ENGINE=INNODB;
+			"""
+			)
+			await self.sqlBroker.c_commit(cur)
+
+		if not await self.sqlBroker.hasTable(cur, 'reftool_matches'):
+			print("[MysqlSchema] Creating table 'reftool_matches'...")
+			await cur.execute(
+			"""	
+			CREATE TABLE reftool_matches (
+			matchuuid VARCHAR(40) NOT NULL,
+			tourneyid INT NOT NULL,
+			finished BOOL NOT NULL DEFAULT FALSE,
+			postid BIGINT UNSIGNED,
+			matchjson TEXT NULL,
+			PRIMARY KEY (matchuuid)
+			) ENGINE=INNODB;
+			"""
+			)
+			await self.sqlBroker.c_commit(cur)
+
+		if not await self.sqlBroker.hasTable(cur, 'completed_matches'):
+			print("[MysqlSchema] Creating table 'completed_matches'...")
+			await cur.execute(
+			"""	
+			CREATE TABLE completed_matches (
+			matchuuid VARCHAR(40) NOT NULL,
+			tourneyid INT NOT NULL,
+			ply1 VARCHAR(40) NOT NULL,
+			ply2 VARCHAR(40) NOT NULL,
+			matchjson TEXT NULL,
+			PRIMARY KEY (matchuuid)
 			) ENGINE=INNODB;
 			"""
 			)
 			await self.sqlBroker.c_commit(cur)
 
 		await self.sqlBroker.close(cur)
-
 
 		#if not await self.sqlBroker.hasTable(cur, 'exibmatches'):
 		#	print("[MysqlSchema] Creating table 'exibmatches'...")
