@@ -141,8 +141,7 @@ class CHUtils():
 
 				#populate data not present in steg
 				self.getOverStrums(imageName, output)
-				output['image_name'] = re.sub(r'[^a-zA-Z0-9-_]', '', image.filename)
-				print(f"Santized imagename: {output['image_name']}")
+				output['image_name'] = re.sub(r'[^a-zA-Z0-9-_.]', '', image.filename)
 				#Notes missed isn't explicitly in steg :shrug:
 				for i, player in enumerate(output['players']):
 					player["notes_missed"] = player["total_notes"] - player['notes_hit']

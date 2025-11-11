@@ -27,14 +27,13 @@ class TourneyConfigModal(Modal):
 			if config.label == "Bracket Config" and config.value != "":
 				await self.sql.setTourneyBrackets(tourney['id'], json.loads(config.value))		
 
-		await interaction.respond("Set whatever you sent me :shrug:")
+		await interaction.respond("Successfully set whatever you sent me :shrug:", ephemeral=True, delete_after=5)
 		self.stop()
 
 class TourneyMatchInProcessModal(Modal):
 	def __init__(self, sql, *args, **kwargs):
 		self.sql = sql
 		super().__init__(*args, **kwargs)
-		self.add_item(InputText(label="UUID", style=discord.InputTextStyle.short, max_length=40, required=True))
 		self.add_item(InputText(label="TourneyID", style=discord.InputTextStyle.short, max_length=4, required=True))
 		self.add_item(InputText(label="Finished", style=discord.InputTextStyle.short, max_length=1, required=True, value=1))
 		self.add_item(InputText(label="Match/Reftool JSON", style=discord.InputTextStyle.long, required=True))
@@ -45,9 +44,11 @@ class TourneyMatchInProcessModal(Modal):
 		if tourney == None:
 			await interaction.followup.send("No active tourney")
 
-		await self.sql.replaceRefToolMatch(self.children[0].value, int(self.children[1].value), bool(self.children[2].value), json.loads(self.children[3].value))
+		#Get UUID from Json rather than separate modal field
+		data = json.loads(self.children[2].value)
+		await self.sql.replaceRefToolMatch(data['uuid'], int(self.children[0].value), bool(self.children[1].value), json.loads(self.children[2].value))
 
-		await interaction.respond("Set whatever you sent me :shrug:")
+		await interaction.respond("Successfully set whatever you sent me :shrug:", ephemeral=True, delete_after=5)
 		self.stop()
 
 class OwnerCmds(commands.Cog):

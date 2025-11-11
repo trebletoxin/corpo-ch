@@ -2,6 +2,7 @@ import discord, asyncio
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import apscheduler.triggers.cron
+from collections import Counter
 
 import chutils
 
@@ -12,14 +13,13 @@ class ProofCallModal(discord.ui.DesignerModal):
 		super().__init__(discord.ui.TextDisplay("Screenshot Submission"), file, *args, **kwargs)
 
 	async def callback(self, interaction: discord.Interaction):
-		print(f"test: {self.children[1]}")
 		self.screens = self.children[1].item.values
-		await interaction.respond("Processing, wait for embed to update")
+		await interaction.respond("Processing, wait for embed to update", ephemeral=True, delete_after=5)
 
 class ProofCallView(discord.ui.View):
-	def __init__(self, proofcall, tourney, match, *args, **kwargs):
+	def __init__(self, proofcall, msg, tourney, match, *args, **kwargs):
 		super().__init__(timeout=None)
-		self.msg = self.message
+		self.msg = msg #if msg != None else self.message
 		self.proofcall = proofcall
 		self.tourney = tourney
 		self.match = match
@@ -39,7 +39,7 @@ class ProofCallView(discord.ui.View):
 		modal = ProofCallModal(title="Screenshot Submission")
 		await interaction.response.send_modal(modal=modal)
 		await modal.wait()
-		await self.proofcall.addScreenshots(interaction, self.tourney, self.match, modal.screens)
+		await self.proofcall.addScreenshots(self.msg, self.tourney, self.match, modal.screens)
 		#await interaction.edit_original_response(embed=self.proofcall.makeProofEmbed(self.tourney, self.match), view=ProofCallView(self.proofcall, self.tourney, self.match, modal.screens))
 
 class ProofCalls():
@@ -65,7 +65,7 @@ class ProofCalls():
 				ply1 = await self.bot.fetch_user(ply1['discordid'])
 				ply2 = await self.bot.fetch_user(ply2['discordid'])
 				print(f"Restarting proof call {match['matchuuid']} with thread id {msg.id}")
-				msg = await msg.edit(content=f"Paging {ply1.mention} and {ply2.mention} for screenshots!", embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, tourney, match))
+				await msg.edit(content=f"Paging {ply1.mention} and {ply2.mention} for screenshots!", embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, msg, tourney, match))
 
 	async def watchRefToolMatches(self):
 		proofs = await self.sql.getActiveProofCalls()
@@ -92,41 +92,68 @@ class ProofCalls():
 		else:
 			print(f"Error finding {tourney['name']} player {match['matchjson']['lowSeed']['name']}!")
 
-		return await channel.create_thread(name=f"Proof call for {ply1.mention} and {ply2.mention}!", content=f"Paging {ply1.mention} and {ply2.mention} for screenshots!", embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, tourney, match, []))
+		#Sanely get the message to pass in, silly threads
+		thread = await channel.create_thread(name=f"Proof call: {ply1.name} vs {ply2.name}!", content=f"Setting up! - Paging {ply1.mention} and {ply2.mention} for screenshots!")
+		msg = await thread.fetch_message(thread.id)
+		await msg.edit(content=f"Paging {ply1.mention} and {ply2.mention} for screenshots!", embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, msg, tourney, match))
+
+		return thread
 
 	async def addScreenshots(self, msg: discord.Message, tourney: dict, match: dict, screens: list) -> bool: #Bool if match is complete
-		successes = 0
+		ply1Db = await self.sql.getPlayerByCHName(match['matchjson']['highSeed']['name'], tourney['id'])
+		ply2Db = await self.sql.getPlayerByCHName(match['matchjson']['lowSeed']['name'], tourney['id'])
+
 		for screen in screens:
 			stegData = await self.chUtils.getStegInfo(screen)
 			if stegData == None:
-				pass
+				print(f"Invalid steg data: {stegData['image_name']}")
+				continue
 
-			print(f'tourney: {tourney['brackets']}')
 			chartInfo = tourney['brackets'][match['matchjson']['setlist']]['set_list'][stegData['song_name']]
 			if chartInfo['checksum'] == stegData['checksum']:
+				plysMatched = 0
+				for ply in stegData['players']:
+					if ply1Db['chname'] == ply['profile_name']:
+						plysMatched += 1
+					if ply2Db['chname'] == ply['profile_name']:
+						plysMatched += 1
+
+				if plysMatched != len(stegData['players']):
+					print("Player names for this match are not correct")
+					continue
+
 				stegData['image_url'] = f"https://matches.corpo-ch.org/{tourney['config']['name'].replace(" ", "")}/{stegData['image_name']}"
+				#Save screenshot
 			else:
-				print(f"screenshot not using correct chart")
+				print(f"Screenshot {stegData['image_name']} not using correct chart")
+				continue
 
 			if 'tb' in match['matchjson'] and match['matchjson']['tb']['song'] == stegData['song_name']:
+				print(f"Adding TB {stegData['song_name']}")
 				match['matchjson']['tb']['steg_data'] = stegData
 			else:
 				for song in match['matchjson']['rounds']:
 					if song['song'] == stegData['song_name']:
+						print(f"Adding {stegData['song_name']}")
 						song['steg_data'] = stegData
-						successes += 1
 						break
 
-		needed = len(match['matchjson']['rounds']) if "tb" not in match else len(match['matchjson']['rounds'] + 1)
-		if successes == needed:
-			await self.sql.saveCompleteMatch(match['matchuuid'], match['tourneyid'], match['matchjson']['highSeed']['name'], match['matchjson']['lowSeed']['name'], match['matchJson'])
-			await msg.edit_original_response(content=f"Match Complete!", embed=self.makeProofEmbed(tourney, match), view=None)
+		successes = sum([1 for d in match['matchjson']['rounds'] if 'steg_data' in d]) + 1 if 'tb' in match['matchjson'] else 0
+		needed = len(match['matchjson']['rounds']) if "tb" not in match['matchjson'] else len(match['matchjson']['rounds']) + 1
+		if needed == successes:
+			print(f"Match {match['matchuuid']} complete!")
+			await self.sql.saveCompleteMatch(match['matchuuid'], match['tourneyid'], match['matchjson']['highSeed']['name'], match['matchjson']['lowSeed']['name'], match['matchjson'])
+			await msg.edit(content=f"Match Complete!", embed=self.makeProofEmbed(tourney, match), view=None)
+			channel = self.bot.get_channel(tourney['config']['proof_channel'])
+			thread = channel.get_thread(msg.id)
+			await thread.archive(locked=True)
 		else:
-			await self.sql.replaceRefToolMatch(match['matchuuid'], match['tourneyid'], True, match['matchjson'], match['postid'])
-			await msg.edit_original_response(embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, tourney, match))
+			await self.sql.replaceRefToolMatch(match['matchuuid'], match['tourneyid'], True, match['matchjson'], msg.id)
+			await msg.edit(embed=self.makeProofEmbed(tourney, match), view=ProofCallView(self, msg, tourney, match))
 
 	def makeProofEmbed(self, tourney: dict, match: dict) -> discord.Embed:
 		embed = discord.Embed(colour=0x3FFF33)
+		embed.set_footer(text=f"UUID: {match['matchuuid']}")
 		ply1 = match['matchjson']['highSeed']
 		ply2 = match['matchjson']['lowSeed']
 		embed.title = f"{tourney['config']['name']} - {ply1['name']}:{ply1['seed']} vs {ply2['name']}:{ply2['seed']}"
@@ -144,8 +171,8 @@ class ProofCalls():
 		for rnd in match['matchjson']['rounds']:
 				rndStr += f"{rnd['pick']} picks {rnd['song']} - {rnd['winner']} wins\n\n"
 
-		if 'tb' in match:
-			rndStr += f"TIEBREAKER - {match['tb']['song']} - {match['tb']['winner']} wins!\n"
+		if 'tb' in match['matchjson']:
+			rndStr += f"TIEBREAKER - {match['matchjson']['tb']['song']} - {match['matchjson']['tb']['winner']} wins!\n\n"
 
 		if match['matchjson']['winner'] == 0:
 			rndStr += f"{ply1['name']} wins the match!"
@@ -161,6 +188,12 @@ class ProofCalls():
 				successStr += f"{song['song']}\n"
 			else:
 				missingStr += f"{song['song']}\n"
+
+		if 'tb' in match['matchjson']:
+			if 'steg_data' in match['matchjson']['tb']:
+				successStr += f"{match['matchjson']['tb']['song']}"
+			else:
+				missingStr += f"{match['matchjson']['tb']['song']}"
 
 		if successStr != "":
 			embed.add_field(name="Received Screens", value=successStr, inline=False)

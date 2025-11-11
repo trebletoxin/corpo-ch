@@ -157,13 +157,13 @@
 		{
 			"index": 1,
 			"pick": "[CORP] Woy",
-			"song": "Silence Followed By A Deafening Roar",
+			"song": "Silence Followed by a Deafening Roar",
 			"winner": "[CORP] Woy"
 		},
 		{
 			"index": 2,
 			"pick": "[CORP] Jetsurf",
-			"song": "Interdisciplanary Sectarism",
+			"song": "Interdisciplinary Sectarism",
 			"winner": "[CORP] Jetsurf"
 		},
 		{
@@ -199,7 +199,7 @@
 		"winner": "[CORP] Jetsurf"
 	},
 	"uuid": "3b0fc146-be43-11f0-9914-0050569d2030",
-	"winner": 0
+	"winner": 1
 }
 
 {
