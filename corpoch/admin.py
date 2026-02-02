@@ -10,11 +10,14 @@ from corpoch.providers import EncoreClient
 
 @admin.register(Chart)
 class ChartAdmin(admin.ModelAdmin):
-	list_display = ('name',  '_bracket', 'charter', 'artist', 'album', 'speed', '_modifiers')
+	list_display = ('name',  '_bracket', 'charter', 'artist', 'album', 'speed', '_modifiers', 'tiebreaker')
 	actions = ['run_encore_import']
 
 	def _bracket(self,obj):
-		return obj
+		retList = []
+		for bracket in obj.brackets.iterator():
+			retList.append(bracket)
+		return retList
 
 	def _modifiers(self, obj):
 		return obj.modifiers

@@ -39,11 +39,12 @@ class GSheetAPI(models.Model):
 
 	def set_key(self, raw_data):
 		encrypted_data = cipher.encrypt(raw_data.encode())
-		self.encrypted_field = encrypted_data.decode()
+		self.api_key = encrypted_data.decode()
+		self.save()
 
 	def get_key(self):
-		decrypted_data = cipher.decrypt(self.encrypted_field.encode())
-		return decrypted_data.decode()
+		decrypted_data = cipher.decrypt(self.api_key.encode())
+		return api_key.decode()
 
 class Chart(models.Model):
 	id = models.AutoField(primary_key=True)
@@ -51,7 +52,7 @@ class Chart(models.Model):
 	artist = models.CharField(verbose_name="Artist", max_length=256, blank=True)
 	album = models.CharField(verbose_name="Album", max_length=256, blank=True)
 	charter = models.CharField(verbose_name="Charter", max_length=32, blank=True)
-	tiebraker = models.BooleanField(verbose_name="Tiebreaker", default=False)
+	tiebreaker = models.BooleanField(verbose_name="Tiebreaker", default=False)
 	modifiers = MultiSelectField("Modifiers", choices=CH_MODIFIERS, default=['NM'])
 	speed = models.PositiveIntegerField(verbose_name="Speed", validators=[MinValueValidator(5), MaxValueValidator(1000)], default=100)
 	category = models.CharField(verbose_name="Chart Category", max_length=16, default="Hybrid")#This needs to be choices
@@ -72,6 +73,21 @@ class Chart(models.Model):
 	@property
 	def encore_search_query(self):
 		return { 'name' : self.name, 'charter' : self.charter, 'artist' : self.artist, 'album' : self.album, 'blake3' : self.blake3 }
+
+	@property
+	def modifiers_short(self):
+		outStr = ""
+		if self.modifiers[0][1] != "NoModifiers":
+			return outStr
+		else:
+			for mod in self.modifiers:
+				outStr += f" ,{mod[0]}"
+	@property
+	def tournament_name(self):
+		retStr = f"{self.name}"
+		if self.name.speed != 100:
+			retStr += f" {speed}"
+		return retStr + self.modifiers_short
 
 	def __str__(self):
 		return self.name
@@ -133,6 +149,10 @@ class TournamentBracket(models.Model):
 	
 	def __str__(self):
 		return f"{self.tournament.short_name} - {self.name}"
+
+	@property
+	def total_bans(self) -> int:
+		return self.num_bans * self.num_players
 
 	@property
 	def short_name(self):
@@ -220,6 +240,10 @@ class GroupSeed(models.Model):
 		return str(self.seed)
 
 	@property
+	def short_name(self):
+		return f"{self.player.ch_name} ({self.seed})"
+
+	@property
 	def full_name(self):
 		return f"{self.group.tournament.short_name} - {self.group.bracket.name} - Group {self.group.name} - Seed {self.seed}"
 
@@ -256,7 +280,8 @@ class TournamentMatch(models.Model):#This class is assumed to be an "official" m
 	def version(self):
 		self.group.bracket.tournament.config.version
 
-	def __str__(self):
+	@property
+	def full_name(self):
 		outStr = f"{self.tournament.short_name} - {self.bracket.name}"
 		for i, ply in enumerate(self.match_players.iterator()):
 			if i == 0:
@@ -264,6 +289,15 @@ class TournamentMatch(models.Model):#This class is assumed to be an "official" m
 			elif i == 1:
 				outStr += f" vs {ply.ch_name}({self.group.seeding.get(player=ply)})" 
 		return outStr
+
+	def __str__(self):
+		outStr = ""
+		for i, ply in enumerate(self.match_players.iterator()):
+			if i == 0:
+				outStr += f"{ply.ch_name}({self.group.seeding.get(player=ply)})"
+			elif i == 1:
+				outStr += f" vs {ply.ch_name}({self.group.seeding.get(player=ply)})" 
+		return outStr	
 
 class TournamentMatchCompleted(TournamentMatch):
 	ended_on = models.DateTimeField(verbose_name="Match end time", auto_now_add=True)
