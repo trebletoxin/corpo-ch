@@ -9,3 +9,6 @@ requests
 celery
 django-multiselectfield
 django-admin-sortable2
+aiohttp
+redis
+django-celery-beat

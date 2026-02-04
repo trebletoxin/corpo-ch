@@ -5,3 +5,31 @@ requires = [
     "wheel"
 ]
 build-backend = "setuptools.build_meta"
+
+[project]
+name = "corpoch"
+version = "1.0.0"
+description = "Corpo CH Tournament Bot"
+readme = "README.md"
+license = {file = "LICENSE"}
+requires-python = ">=3.11"
+authors = [
+    { name = "AaronKable", email = "aaronkable@gmail.com"}
+]
+keywords = [
+    "allianceauth",
+    "eveonline",
+]
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+include = ["corpoch*"]
+exclude = ["DiscordOauth2*", 'discord_oauth']
+
+[tool.flit.module]
+name = "corpoch"
+
+[tool.isort]
+profile = "django"

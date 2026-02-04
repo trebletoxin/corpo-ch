@@ -5,7 +5,7 @@ from adminsortable2.admin import CustomInlineFormSet, SortableAdminBase, Sortabl
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from corpoch.models import Chart, Tournament, TournamentConfig, TournamentBracket, TournamentQualifier, TournamentPlayer, GroupSeed, TournamentRound
-from corpoch.models import TournamentMatchCompleted, TournamentMatchOngoing, BracketGroup, QualifierSubmission, CH_MODIFIERS
+from corpoch.models import TournamentMatchCompleted, TournamentMatchOngoing, BracketGroup, QualifierSubmission, CH_MODIFIERS, MatchBan
 from corpoch.providers import EncoreClient
 
 @admin.register(Chart)
@@ -107,14 +107,32 @@ class QualifierSubmission(admin.ModelAdmin):
 	def player_ch_name(self, obj):
 		return obj.player.ch_name
 
-class RoundsInline(SortableStackedInline):
+class RoundsOngoingInline(SortableStackedInline):
 	model = TournamentRound
+	exclude = ['completed_match']
+	extra = 1
+
+class RoundsCompletedInline(SortableStackedInline):
+	model = TournamentRound
+	exclude = ['ongoing_match']
+	extra = 1
+
+class BansOngoingInline(SortableStackedInline):
+	model = MatchBan
+	exclude = ['completed_match']
+	extra = 1
+
+class BansCompletedInline(SortableStackedInline):
+	model = MatchBan
+	exclude = ['ongoing_match']
+	extra = 1
 
 @admin.register(TournamentMatchCompleted)
 class TournamentMatchCompletedAdmin(SortableAdminBase, admin.ModelAdmin):
 	list_display = ('__str__', 'processed', 'bracket_name', 'group', '_match_players', 'started_on', 'version')
-	inlines = [RoundsInline]
+	inlines = [BansCompletedInline, RoundsCompletedInline]
 	list_per_page = 16
+	exclyde = ['ongoing_match']
 
 	def bracket_name(self, obj):
 		return obj.group.bracket.name
@@ -130,17 +148,24 @@ class TournamentMatchCompletedAdmin(SortableAdminBase, admin.ModelAdmin):
 
 @admin.register(TournamentMatchOngoing)
 class TournamentMatchOngoingAdmin(SortableAdminBase, admin.ModelAdmin):
-	list_display = ('__str__', 'processed', '_bracket_name', 'group', '_match_players', 'started_on', 'version')
-	inlines = [RoundsInline]
+	list_display = ('__str__', 'processed', '_bracket_name', 'group', '_match_players', '_match_bans', 'started_on', 'version')
+	inlines = [BansOngoingInline, RoundsOngoingInline]
 	list_per_page = 16
+	exclude = ['completed_match']
 
 	def _bracket_name(self, obj):
 		return obj.group.bracket.name
 
 	def _match_players(self, obj):
 		retList = []
-		for player in obj.match_players.iterator():
-			retList.append(player.ch_name)
+		for seed in obj.match_players.iterator():
+			retList.append(seed.player.ch_name)
+		return retList
+
+	def _match_bans(self, obj):
+		retList = []
+		for ban in MatchBan.objects.all().iterator():
+			retList.append(ban.chart)
 		return retList
 
 	def formfield_for_manytomany(self, db_field, request, **kwargs):#Limit options in admin to ONLY players/bans in a group?

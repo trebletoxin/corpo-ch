@@ -9,6 +9,7 @@ https://docs.djangoproject.com/en/3.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
+
 import os
 from dotenv import load_dotenv
 
@@ -31,8 +32,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_celery_beat',
+    'django_celery_results',
+    'redis',
     'corpoch',
-    'corpodbot',
+    'corpoch.dbot.apps.DiscordBotConfig',
     'adminsortable2'
 ]
 
@@ -69,10 +73,10 @@ WSGI_APPLICATION = 'DiscordOauth2.wsgi.application'
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME" : os.getenv("mysql_db"),
-        "USER" : os.getenv("mysql_user"),
-        "PASSWORD" : os.getenv("mysql_pw"),
-        "HOST" : os.getenv("mysql_host"),
+        "NAME" : os.getenv("MYSQL_DB"),
+        "USER" : os.getenv("MYSQL_USER"),
+        "PASSWORD" : os.getenv("MYSQL_PW"),
+        "HOST" : os.getenv("MYSQL_HOST"),
     }
 }
 

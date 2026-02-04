@@ -4,11 +4,8 @@ import json
 from multiselectfield import MultiSelectField
 from django.db import models
 from django.contrib import admin
-from django.contrib.contenttypes.fields import GenericRelation
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.contrib.contenttypes.fields import GenericForeignKey
 from django.core.exceptions import ValidationError
-from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
 CH_MODIFIERS = (
@@ -62,7 +59,6 @@ class Chart(models.Model):
 	url = models.URLField(verbose_name="Chart URL", blank=True)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Chart"
 		verbose_name_plural = "Charts"
 
@@ -100,7 +96,6 @@ class Tournament(models.Model):
 	active = models.BooleanField(verbose_name="In-Progress", default=False)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Tournament"
 		verbose_name_plural = "Tournaments"
 
@@ -124,7 +119,6 @@ class TournamentConfig(models.Model):
 	version = models.CharField(verbose_name="Clone Hero Version", choices=CH_VERSIONS, max_length=32, default=["v1.0.0.4080-final"])
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Config"
 		verbose_name_plural = "Configurations"
 
@@ -139,11 +133,12 @@ class TournamentBracket(models.Model):
 	num_bans = models.IntegerField(verbose_name="Num Bans", default=1)
 	allow_defer = models.BooleanField(verbose_name="Allow Ban Deferral", default=True)
 	defer_swap = models.BooleanField(verbose_name="Using Defer Alters First Pick", default=False)
+	last_loser_picks = models.BooleanField(verbose_name="Loser Last Round Picks", default=True)
+	tiebeaker_csc = models.BooleanField(verbose_name="Tibeaker CSC Rules", default=False)
 	score_log = models.BigIntegerField(verbose_name="Score Log Channel Discord ID", default=-1)
 	name = models.CharField(verbose_name="Bracket Name", max_length=128, default=f"New Bracket")
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Bracket"
 		verbose_name_plural = "Brackets"
 	
@@ -167,7 +162,6 @@ class TournamentPlayer(models.Model):
 	config = models.JSONField(verbose_name="Player Configuration", default=dict, blank=True)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Player"
 		verbose_name_plural = "Players"
 
@@ -193,7 +187,6 @@ class TournamentQualifier(models.Model):
 	gsheet = models.URLField(verbose_name="Submissions Google Sheet", null=True)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Qualifier"
 		verbose_name_plural = "Qualifiers"
 
@@ -207,7 +200,6 @@ class BracketGroup(models.Model):
 	#Field to auto-create roles?
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Bracket Group"
 		verbose_name_plural = "Bracket Groups"
 
@@ -219,29 +211,29 @@ class BracketGroup(models.Model):
 	def active_players(self) -> list:
 		return self.players.objects.filter(is_active=True)
 
-	def active_players(self) -> list:
-		return self.players.objects.filter(is_active=True)
-
 	def __str__(self):
 		return f"{self.tournament.short_name} - {self.bracket.name} - {self.name}"
 
 class GroupSeed(models.Model):
 	seed = models.PositiveIntegerField(blank=False, null=False)
 	group = models.ForeignKey(BracketGroup, related_name="seeding", verbose_name="Group Seeding", null=True, on_delete=models.CASCADE)
-	player = models.ForeignKey(TournamentPlayer, related_name="players", verbose_name="Group Seed", null=True, on_delete=models.CASCADE)
+	player = models.ForeignKey(TournamentPlayer, related_name="group_seeding", verbose_name="Group Seed", null=True, on_delete=models.CASCADE)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Seed Placement"
 		verbose_name_plural = "Seed Placements"
 		ordering = ['seed']
 
 	def __str__(self):
+		return f"{self.player.ch_name} ({self.seed})"
+
+	@property
+	def seed_num(self):
 		return str(self.seed)
 
 	@property
-	def short_name(self):
-		return f"{self.player.ch_name} ({self.seed})"
+	def player_ch_name(self):
+		return self.player.ch_name 
 
 	@property
 	def full_name(self):
@@ -250,13 +242,11 @@ class GroupSeed(models.Model):
 class TournamentMatch(models.Model):#This class is assumed to be an "official" match - new class for exhibition/non-"tracked" matches
 	id = models.CharField(primary_key=True, verbose_name="Match ID", max_length=40, default=uuid.uuid1)
 	processed = models.BooleanField(verbose_name="Match Processed", default=False)
-	group = models.ForeignKey(BracketGroup, related_name='%(class)s_matches', verbose_name="Group", on_delete=models.CASCADE, null=True)#limit_options_to groups in bracket somehow?
-	match_players = models.ManyToManyField(TournamentPlayer, related_name="%(class)s_players", verbose_name="Players", blank=True)
-	bans = models.ManyToManyField(Chart, related_name="%(class)s_bans", verbose_name="Bans", blank=True)
+	group = models.ForeignKey(BracketGroup, related_name='%(class)s_matches', verbose_name="Group", on_delete=models.CASCADE)#limit_options_to groups in bracket somehow?
+	match_players = models.ManyToManyField(GroupSeed, related_name="%(class)s_players", verbose_name="Players", blank=True)
 	started_on = models.DateTimeField(verbose_name="Match Start Time", auto_now_add=True)
 
 	class Meta:
-		app_label = "corpoch"
 		ordering = ['-started_on']
 		abstract = True
 
@@ -292,11 +282,11 @@ class TournamentMatch(models.Model):#This class is assumed to be an "official" m
 
 	def __str__(self):
 		outStr = ""
-		for i, ply in enumerate(self.match_players.iterator()):
+		for i, seed in enumerate(self.match_players.iterator()):
 			if i == 0:
-				outStr += f"{ply.ch_name}({self.group.seeding.get(player=ply)})"
+				outStr += f"{seed.player.ch_name}({seed.seed})"
 			elif i == 1:
-				outStr += f" vs {ply.ch_name}({self.group.seeding.get(player=ply)})" 
+				outStr += f" vs {seed.player.ch_name}({seed.seed})" 
 		return outStr	
 
 class TournamentMatchCompleted(TournamentMatch):
@@ -305,12 +295,13 @@ class TournamentMatchCompleted(TournamentMatch):
 	loser = models.ForeignKey(TournamentPlayer, related_name="matches_lost", verbose_name="Loser", on_delete=models.CASCADE)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Completed Match"
 		verbose_name_plural = "Matches Completed"
 
 	def __str__(self):
-		return f"{self.tournament.short_name} - {self.bracket.name} - {self.player1.ch_name} vs {self.player2.ch_name} - {self.match_results['highSeed']['points']}-{self.match_results['lowSeed']['points']}"
+		ply1 = self.match_players[0]
+		ply2 = self.match_players[1]
+		return f"{self.tournament.short_name} - {self.bracket.name} - {ply1.ch_name} vs {ply2.ch_name} "
 
 class TournamentMatchOngoing(TournamentMatch): 
 	finished = models.BooleanField(verbose_name="Finished", default=False) #Flag to match in-progress as complete, start triggers to move to completed
@@ -318,12 +309,13 @@ class TournamentMatchOngoing(TournamentMatch):
 	message = models.BigIntegerField(verbose_name="Ref-Tool Discord Message ID", null=True, blank=True)	
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Ongoing Match"
 		verbose_name_plural = "Ongoing Matches"
 
-	def completeMatch(self, winner: TournamentPlayer, loser: TournamentPlayer):
-		compMatch = TournamentMatchCompleted(id=self.id, winner=winner, loser=loser, bracket=self.bracket, player1=self.player1, player1_ban=self.player1_ban, player2=self.player2, player2_ban=self.player2_ban, match_data=self.match_data)
+	def complete_match(self):
+		pass
+		#tmpRnds = 
+		#compMatch = TournamentMatchCompleted(id=self.id, winner=winner, loser=loser, bracket=self.bracket, player1=self.player1, player1_ban=self.player1_ban, player2=self.player2, player2_ban=self.player2_ban, match_data=self.match_data)
 
 class TournamentRound(models.Model):
 	num = models.PositiveIntegerField(blank=False, null=False)
@@ -337,7 +329,6 @@ class TournamentRound(models.Model):
 	screenshot = models.ImageField(upload_to="tournament_screens/", verbose_name="Screenshot", null=True)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Group Match Round"
 		verbose_name_plural = "Group Match Rounds"
 		ordering=['num']
@@ -345,6 +336,28 @@ class TournamentRound(models.Model):
 	def __str__(self):
 		return f"{self.match.group.bracket.tournament.short_name} - {self.ongoing_match.group.bracket.name} - Group {self.ongoing_match.group.name} - {self.completed_match.player1.ch_name} vs {self.completed_match.player2.ch_name}"
 
+#Potential class for a "Series" of tournaments - just needs to be a list of tournaments for ogranization
+#class TournamentSeries(models.Model):
+#	id = models.PositiveIntegerField(blank=False, null=False)
+
+class MatchBan(models.Model):
+	num = models.PositiveIntegerField(blank=False, null=False)
+	chart = models.ForeignKey(Chart, related_name="bans", verbose_name="Chart Banned", blank=True, on_delete=models.CASCADE)
+	player = models.ForeignKey(GroupSeed, related_name="player_bans", verbose_name="Player", blank=True, on_delete=models.CASCADE)
+	ongoing_match = models.ForeignKey(TournamentMatchOngoing, related_name="%(class)s_bans", verbose_name="Ongoing Match ID", on_delete=models.SET_NULL, null=True, blank=True)
+	completed_match = models.ForeignKey(TournamentMatchCompleted, related_name="%(class)s_bans", verbose_name="Completed Match ID", on_delete=models.CASCADE, null=True, blank=True)
+
+	class Meta:
+		verbose_name = "Match Ban"
+		verbose_name_plural = "Match Bans"
+		ordering = ['num']
+
+	def __str__(self):
+		return str(self.chart.name)
+
+	@property
+	def get_player_ch_name(self):
+		return str(self.player.ch_name)
 
 class QualifierSubmission(models.Model):
 	quali = models.CharField(primary_key=True, verbose_name="Qualifier ID", max_length=40, default=uuid.uuid1)
@@ -355,7 +368,6 @@ class QualifierSubmission(models.Model):
 	steg_json = models.JSONField(verbose_name="Steg Data", default=dict, blank=True)
 
 	class Meta:
-		app_label = "corpoch"
 		verbose_name = "Qualifier Submission"
 		verbose_name_plural = "Qualifier Submissions"
 
