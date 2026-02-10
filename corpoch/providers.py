@@ -1,4 +1,4 @@
-import requests, json, struct, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
+import requests, json, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
 from datetime import datetime
 from PIL import Image, ImageEnhance
 from django.db import models
@@ -13,11 +13,34 @@ class SNGHandler:
 	def __init__(self):
 		pass
 
-	def parse_fileMetaArray(self, data) -> dict:
+	def parse_metadataPairArray(self, data: bytes) -> list[str, str]:
+		results = []
 		byte_stream = io.BytesIO(data)
-		i = 0 #lets hard bound this for now
-		while i < 32:
+		while True:
+			keyLen_bytes = byte_stream.read(4)
+			if not keyLen_bytes:
+				break
+			keyLen = int.from_bytes(keyLen_bytes, byteorder='little')
+			
+			key_bytes = byte_stream.read(keyLen)
+			key = key_bytes.decode('utf-8')
+			
+			valueLen_bytes = byte_stream.read(4)
+			valueLen = int.from_bytes(valueLen_bytes, byteorder='little')
+			
+			value_bytes = byte_stream.read(valueLen)
+			value = value_bytes.decode('utf-8')
+			
+			results.append([key, value])
+		return results
+
+	def parse_fileMetaArray(self, data: bytes) -> list[str, int, int]:
+		results = []
+		byte_stream = io.BytesIO(data)
+		while True:
 			filenameLen_bytes = byte_stream.read(1)
+			if not filenameLen_bytes:
+				break
 			filenameLen = int.from_bytes(filenameLen_bytes, byteorder='little')
 			
 			filename_bytes = byte_stream.read(filenameLen)
@@ -28,14 +51,19 @@ class SNGHandler:
 			
 			contentsIndex_bytes = byte_stream.read(8)
 			contentsIndex = int.from_bytes(contentsIndex_bytes, byteorder='little')
-			if "notes.chart" in filename or "notes.mid" in filename:
-				return {"Index" : contentsIndex, "Length" : contentsLen}
-
-			i += 1
-		return None #Fail
+			
+			results.append([filename, contentsLen, contentsIndex])
+		return results
+			
+	def unmaskFileByteArray(self, dataArray: list[int], xorMask:list[int]) -> list[int]:
+		unmasked_file_bytes = [None] * len(dataArray)
+		for i in range(len(dataArray)):
+			xorKey = xorMask[i % 16] ^ (i % 256)
+			unmasked_file_bytes[i] = dataArray[i] ^ xorKey
+			return unmasked_file_bytes
 
 	#Meant to be fed in raw content - this may be able to be improved?
-	def get_chart_data(self, all_bytes: bytes) -> bytes:
+	def get_sng_data(self, all_bytes: bytes) -> list[str, bytes]:
 		all_bytes_stream = io.BytesIO(all_bytes)
 		all_bytes_stream.seek(10)
 		
@@ -45,7 +73,10 @@ class SNGHandler:
 		metadataLen_bytes = all_bytes_stream.read(8)
 		metadataLen = int.from_bytes(metadataLen_bytes, byteorder='little', signed=False)
 		
-		all_bytes_stream.seek(metadataLen, 1)
+		all_bytes_stream.seek(8,1)
+		
+		metadataPairArray_bytes = all_bytes_stream.seek(metadataLen-8, 1)
+		metadataPairArray = self.parse_metadataPairArray(metadataPairArray_bytes)
 		
 		fileMetaLen_bytes = all_bytes_stream.read(8)
 		fileMetaLen = int.from_bytes(fileMetaLen_bytes, byteorder='little', signed=False)
@@ -55,21 +86,31 @@ class SNGHandler:
 		fileMetaArray_bytes = all_bytes_stream.read(fileMetaLen-8)
 		fileMetaArray = self.parse_fileMetaArray(fileMetaArray_bytes)
 
-		fileDataLen_bytes = all_bytes_stream.seek(8, 1)
+		results = []
+		with io.BytesIO() as songini_stream:
+			songini_stream.write(bytes(f"[song]\n".encode('utf-8')))
+			for row in metadataPairArray:
+				line = f"{row[0]} = {row[1]}\n"
+				line_bytes = bytes(line.encode('utf-8'))
+				songini_bytes = songini_stream.write(line_bytes)
+			results.append(["song.ini", songini_bytes])
+			
+		for row in fileMetaArray:
+			all_bytes_stream.seek(row[2])
+			results.append([row[0],bytes(self.unmaskFileByteArray(list(all_bytes_stream.read(row[1])),xorMask))])
+			
+		return results
 
-		all_bytes_stream.seek(fileMetaArray['Index'])
-		file_Chart_bytes = all_bytes_stream.read(fileMetaArray['Length'])
-		file_Chart_bytes_array = list(file_Chart_bytes)
-		unmasked_file_Chart_bytes = [None] * len(file_Chart_bytes_array)
-		for i in range(len(file_Chart_bytes_array)):
-			xorKey = xorMask[i % 16] ^ (i % 256)
-			unmasked_file_Chart_bytes[i] = file_Chart_bytes_array[i] ^ xorKey
-
-		return bytes(unmasked_file_Chart_bytes)
-
+	def get_chart_data(self, content) -> bytes:
+		chart_files = self.get_sng_data(content)
+		for row in chart_files:
+			filename = row[0]
+			if "notes.chart" in filename or "notes.mid" in filename:
+				return row[1]
+	
 	def get_md5(self, content) -> str:
 		return hashlib.md5(self.get_chart_data(content)).hexdigest()
-
+			
 class EncoreClient:
 	def __init__(self, limit: int=24, exact: bool=True):
 		#limit 24 for discord view select options limit
