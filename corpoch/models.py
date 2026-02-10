@@ -28,7 +28,7 @@ CH_VERSIONS = [
 
 class GSheetAPI(models.Model):
 	api_key = fields.EncryptedJSONField(null=False, blank=True, default=dict, encoder=DjangoJSONEncoder)
-
+	#ONLY ONE KEY SHOULD BE IN THIS TABLE
 	class Meta:
 		verbose_name = "Google Sheets API"
 
@@ -233,6 +233,9 @@ class GroupSeed(models.Model):
 	@property
 	def full_name(self):
 		return f"{self.group.tournament.short_name} - {self.group.bracket.name} - Group {self.group.name} - Seed {self.seed}"
+
+	def check_ch_name(self, testname):
+		return True if testname in self.player.ch_name else False ## do more checks for formatting, testing now
 
 class TournamentMatch(models.Model):#This class is assumed to be an "official" match - new class for exhibition/non-"tracked" matches
 	id = models.CharField(primary_key=True, verbose_name="Match ID", max_length=40, default=uuid.uuid1)

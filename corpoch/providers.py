@@ -147,6 +147,10 @@ class CHOpt:
 		self._url = os.getenv("CHOPT_URL")
 		self._encore = EncoreClient()
 		self._sng = SNGHandler()
+		self.opts = { 'whammy' : 0, 'squeeze' : 0, 'speed' : 100, 'output_path' : True }
+		self.url = ""
+		self.img = None
+		self.file = ""
 		#Create dirs
 		if not os.path.isdir(self._scratch):
 			os.makedirs(self._scratch)
@@ -159,23 +163,20 @@ class CHOpt:
 			f.write(content)
 		return outFile
 
-	#Meant to be fed in from the 
-	def get_path_image(self, chart, opts: dict) -> str:
+	def gen_path(self, chart) -> str:
 		if isinstance(chart, Chart):
-			url = chart.url
-			content = self._encore.download_from_url(url)
+			content = self._encore.download_from_url(chart.url)
 		elif isinstance(chart, dict):
-			url = self._encore.url(chart)
 			content = self._encore.download_from_chart(chart)
 		else:
-			print("get_path_image called incorrectly, chart not type Chart or encore chart dict")
+			print("gen_path called incorrectly, chart not type Chart or encore chart dict")
 			return None
 
 		chartFile = self._prep_chart(self._sng.get_chart_data(content))
 		fileId = uuid.uuid1()
 		outPng = f"{self._output}/{fileId}.png"
-		print(f"Output PNG: {outPng}")
-		choptCall = f"{self._chopt} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {chartFile} -i guitar -d expert {'' if opts['output_path'] else '-b'} -o {outPng}"
+		print(f"CHOPT: Output PNG: {outPng}")
+		choptCall = f"{self._chopt} -s {self.opts['speed']} --ew {self.opts['whammy']} --sqz {self.opts['squeeze']} -f {chartFile} -i guitar -d expert {'' if self.opts['output_path'] else '-b'} -o {outPng}"
 		try:
 			subprocess.run(choptCall, check=True, shell=True, stdout=subprocess.DEVNULL)
 		except Exception as e:
@@ -184,7 +185,10 @@ class CHOpt:
 			return None
 
 		os.remove(chartFile)
-		return f"{self._url}/{fileId}.png"
+		self.url = f"{self._url}/{fileId}.png"
+		self.img = Image.open(outPng)
+		self.file = outPng
+		return self.url
 
 class CHStegTool:
 	def __init__(self):
@@ -281,15 +285,14 @@ class CHStegTool:
 		return embed
 
 class GSheets():
-	def __init__(self, tid: int):
-		self.tid = tid		
-		self.frmtBorder = {'textFormat': {'bold': False}, "horizontalAlignment": "CENTER", 'borders': {'right': {'style' : 'SOLID'}, 'left': {'style' : 'SOLID' }}}
-
+	def __init__(self, tid: int):	
+		self._format_border = None#{'textFormat': {'bold': False}, "horizontalAlignment": "CENTER", 'borders': {'right': {'style' : 'SOLID'}, 'left': {'style' : 'SOLID' }}}
 		#TODO: Make a django-admin task to resend the match data to the airtable (or any sheet)
 
-	async def init(self, sheet: str) -> bool: #sheet is an arbitrary string "qualifier", "livematch" and "stats"
+	#Needed as if the GSheetApi objects call is in the normal init, app load fails for dbot due to DB access before django is ready
+	def init(self, sheet: str) -> bool:
 		self.gc = gspread.service_account(GSheetApi.objects.get())
-		self.tourneyConf = await self.sql.getTourneyConfig(self.tid)
+		self.tourney = self.sql.getTourneyConfig(self.tid)
 
 		if "disable_gsheets" in self.tourneyConf and self.tourneyConf['disable_gsheets']:
 			return True
@@ -308,7 +311,7 @@ class GSheets():
 			self.ws.update([["Discord Name", "Clone Hero Name", "Score", "Notes Missed", "Notes Hit", "Overstrums", "Ghosts", "Phrases Earned", "Submission Timestamp", "Screenshot Timestamp", "Image URL", "Game Version" ]], "A2:L2")
 			self.ws.format("A2:L2", {'textFormat': {'bold': True}, "horizontalAlignment": "CENTER", 'borders': { 'bottom': { 'style' : 'SOLID' }, 'left': { 'style' : 'SOLID' }, 'right': { 'style' : 'SOLID' }}})
 			self.tourneyConf['qualifier_sheet'] = self.qualiSheet.url
-			await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
+			#await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
 		elif "qualifier" in sheet:
 			self.qualiSheet = self.gc.open_by_url(self.tourneyConf['qualifier_sheet'])
 			self.qualiws = self.qualiSheet.worksheet("Raw Qualifier Submissions")
@@ -319,7 +322,7 @@ class GSheets():
 				print(f"Setting up live match sheet for {self.tourneyConf['name']} : {self.liveMatchSheet.url}")
 				self.lmws = self.liveMatchSheet.worksheet("match_data")
 				self.tourneyConf['livematch_sheet'] = self.liveMatchSheet.url
-				await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
+				#await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
 			except:
 				return False
 		elif "livematch" in sheet:
@@ -332,7 +335,7 @@ class GSheets():
 				print(f"Setting up quali sheet for {self.tourneyConf['name']} : {self.statsSheet.url}")
 				self.sws = self.statsSheet.worksheet("match_data")
 				self.tourneyConf['stats_sheet'] = self.statsSheet.url
-				await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
+				#await self.sql.setTourneyConfig(self.tid, self.tourneyConf)
 			except:
 				return False
 		elif "stats" in sheet:
