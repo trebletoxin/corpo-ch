@@ -63,7 +63,7 @@ class SNGHandler:
 			return unmasked_file_bytes
 
 	#Meant to be fed in raw content - this may be able to be improved?
-	def get_sng_data(self, all_bytes: bytes) -> list[str, bytes]:
+	def get_sng_files(self, all_bytes: bytes) -> list[str, bytes]:
 		all_bytes_stream = io.BytesIO(all_bytes)
 		all_bytes_stream.seek(10)
 		
@@ -102,7 +102,7 @@ class SNGHandler:
 		return results
 
 	def get_chart_data(self, content) -> bytes:
-		chart_files = self.get_sng_data(content)
+		chart_files = self.get_sng_files(content)
 		for row in chart_files:
 			filename = row[0]
 			if "notes.chart" in filename or "notes.mid" in filename:
@@ -110,7 +110,7 @@ class SNGHandler:
 	
 	def get_md5(self, content) -> str:
 		return hashlib.md5(self.get_chart_data(content)).hexdigest()
-			
+
 class EncoreClient:
 	def __init__(self, limit: int=24, exact: bool=True):
 		#limit 24 for discord view select options limit
