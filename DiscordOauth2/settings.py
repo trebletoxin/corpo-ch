@@ -21,11 +21,18 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 ALLOWED_HOSTS = [ os.getenv("BASE_URL") ]
 CSRF_TRUSTED_ORIGINS=[f"https://{os.getenv("BASE_URL")}"]
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("BOT_SECRET")
+CHOPT_PATH = os.getenv("CHOPT_PATH")
+CHOPT_OUTPUT = os.getenv("CHOPT_OUTPUT")
+CHSTEG_PATH = os.getenv("CHSTEG_PATH")
+EJF_ENCRYPTION_KEYS = os.getenv("DB_CRYPT_KEY")
 DEBUG = os.getenv("DEBUG")
+CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL")
+CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND")
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -34,9 +41,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'django_celery_beat',
     'django_celery_results',
+    'encrypted_json_fields',
     'redis',
     'corpoch',
-    'corpoch.dbot.apps.DiscordBotConfig',
+    'corpoch.dbot',
     'adminsortable2'
 ]
 
@@ -68,7 +76,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'DiscordOauth2.wsgi.application'
+ASGI_APPLICATION = 'DiscordOauth2.asgi.application'
 
 DATABASES = {
     "default": {
@@ -113,10 +121,8 @@ USE_TZ = True
 
 STATIC_URL = '/static/'
 STATIC_ROOT = "/var/www/ch"
-#STATICFILES_DIRS = [
-#    BASE_DIR / "mainapp/static",
-#]
-
+MEDIA_ROOT = '/var/www/ch/images'
+MEDIA_URL = '/images/'
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field

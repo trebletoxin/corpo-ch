@@ -1,12 +1,17 @@
 import uuid
 import typing
 import json
+from corpoch import settings#corpoch.settings.py
+
 from multiselectfield import MultiSelectField
 from django.db import models
 from django.contrib import admin
 from django.core.validators import MaxValueValidator, MinValueValidator
+from django.core.serializers.json import DjangoJSONEncoder
+from encrypted_json_fields import fields
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.db import models
 
 CH_MODIFIERS = (
 	("NM", "NoModifiers"),
@@ -21,27 +26,11 @@ CH_VERSIONS = [
 	("v1.0.0.4080-final", "v1.0.0.4080-final")
 ]
 
-from cryptography.fernet import Fernet
-from django.db import models
-import base64
-import os
-
-# Generate a key for encryption (store securely)
-key = Fernet.generate_key()
-cipher = Fernet(key)
-
-#GSheet API Key
 class GSheetAPI(models.Model):
-	api_key = models.TextField()
+	api_key = fields.EncryptedJSONField(null=False, blank=True, default=dict, encoder=DjangoJSONEncoder)
 
-	def set_key(self, raw_data):
-		encrypted_data = cipher.encrypt(raw_data.encode())
-		self.api_key = encrypted_data.decode()
-		self.save()
-
-	def get_key(self):
-		decrypted_data = cipher.decrypt(self.api_key.encode())
-		return api_key.decode()
+	class Meta:
+		verbose_name = "Google Sheets API"
 
 class Chart(models.Model):
 	id = models.AutoField(primary_key=True)
@@ -112,7 +101,7 @@ class Tournament(models.Model):
 
 class TournamentConfig(models.Model):
 	tournament = models.OneToOneField(Tournament, related_name="config", verbose_name="Tournament Configuration", on_delete=models.CASCADE)
-	rules = models.CharField(verbose_name="Rules", max_length=1024, default="Some rules go here")
+	rules = models.TextField(verbose_name="Rules", max_length=1024, default="Some rules go here")
 	enable_gsheets = models.BooleanField(verbose_name="Gsheets Integration", default=True)
 	ref_role = models.BigIntegerField(verbose_name="Discord Ref Role ID", null=True, blank=True)
 	proof_channel = models.BigIntegerField(verbose_name="Discord Proof Channel ID", null=True, blank=True)
@@ -168,36 +157,42 @@ class TournamentPlayer(models.Model):
 	def __str__(self):
 		return self.ch_name
 
+	#This needs to be checked - probably not used/not right
 	@property
 	def brackets(self):
-		return self.tournament.brackets.objects.filter(players__id=self.id)
+		return self.tournament.brackets.objects.select_related('player').filter(players__id=self.id)
 
 	def check_ch_name(self, testname):
 		return True if testname in self.ch_name else False ## do more checks for formatting, testing now
 
 class TournamentQualifier(models.Model):
 	id = models.AutoField(primary_key=True)
-	#This will need to be tweaked if going to allow multiple qualifiers for a tourney
-	tournament = models.ForeignKey(Tournament, related_name='qualifier', verbose_name="Bracket Qualifier", on_delete=models.CASCADE)
+	#Use either tournament or bracket+tourney - allows for multiple "main" brackets to have a single qualifier or a qualifier per bracket
+	tournament = models.ForeignKey(Tournament, related_name='qualifier', verbose_name="Tournament", on_delete=models.CASCADE)
+	bracket = models.ForeignKey(TournamentBracket, related_name='qualifier', verbose_name="Bracket", blank=True, null=True, on_delete=models.CASCADE)
+	chart = models.ForeignKey(Chart, verbose_name="Qualifier Chart", on_delete=models.CASCADE)
 	single_submission = models.BooleanField(verbose_name="Single Submission", default=False)
-	qualifier_chart = models.ForeignKey(Chart, verbose_name="Qualifier Chart", on_delete=models.CASCADE)
-	form_link = models.URLField(verbose_name="Qualifier Form Link", null=True)
-	end_time = models.DateTimeField(verbose_name="Qualifier End Time", auto_now_add=True)
-	rules = models.CharField(verbose_name="Qualifier Rules", max_length=1024, default="Placeholder rules")
-	gsheet = models.URLField(verbose_name="Submissions Google Sheet", null=True)
+	form_link = models.URLField(verbose_name="Google Form Link", null=True, blank=True)
+	end_time = models.DateTimeField(verbose_name="End Time", default=timezone.now)
+	rules = models.TextField(verbose_name="Rules", max_length=1024, default="Placeholder rules")
+	channel = models.BigIntegerField(verbose_name="Submission Discord Channel ID", db_index=True, blank=True, null=True)
+	gsheet = models.URLField(verbose_name="Submissions Google Sheet", null=True, blank=True)
 
 	class Meta:
 		verbose_name = "Qualifier"
 		verbose_name_plural = "Qualifiers"
 
 	def __str__(self):
-		return f"{self.tournament.short_name} - Qualifier"
+		if self.bracket:
+			return f"{self.bracket.tournament.short_name} - {self.bracket.name}"
+		else:
+			return f"{self.tournament.short_name}"
 
 class BracketGroup(models.Model):
 	id = models.AutoField(primary_key=True, db_index=True)
 	bracket = models.ForeignKey(TournamentBracket, related_name="groups", verbose_name="Bracket Groups", on_delete=models.CASCADE)
 	name = models.CharField(verbose_name="Group Name", max_length=8, default="A")
-	#Field to auto-create roles?
+	discord = models.BigIntegerField(verbose_name="Group Role Discord ID", null=True, blank=True, db_index=True)
 
 	class Meta:
 		verbose_name = "Bracket Group"
@@ -301,7 +296,7 @@ class TournamentMatchCompleted(TournamentMatch):
 	def __str__(self):
 		ply1 = self.match_players[0]
 		ply2 = self.match_players[1]
-		return f"{self.tournament.short_name} - {self.bracket.name} - {ply1.ch_name} vs {ply2.ch_name} "
+		return f"{self.tournament.short_name} - {self.group.bracket.name} - Group {self.group.name} - {ply1.ch_name} vs {ply2.ch_name} "
 
 class TournamentMatchOngoing(TournamentMatch): 
 	finished = models.BooleanField(verbose_name="Finished", default=False) #Flag to match in-progress as complete, start triggers to move to completed
@@ -318,6 +313,12 @@ class TournamentMatchOngoing(TournamentMatch):
 		#tmpRnds = 
 		#compMatch = TournamentMatchCompleted(id=self.id, winner=winner, loser=loser, bracket=self.bracket, player1=self.player1, player1_ban=self.player1_ban, player2=self.player2, player2_ban=self.player2_ban, match_data=self.match_data)
 
+	def __str__(self):
+		outStr = f"{self.tournament.short_name} - {self.group.bracket.name} - Group {self.group.name}"
+		if len(self.match_players) > 2:#Not going to work 3+ players
+			outStr += f" - {self.match_players[0].ch_name} ({self.match_players[0].seed}) vs {self.match_players[1].ch_name} ({self.match_players[0].seed})"
+		return 
+
 class TournamentRound(models.Model):
 	num = models.PositiveIntegerField(blank=False, null=False)
 	ongoing_match = models.ForeignKey(TournamentMatchOngoing, related_name="ongoing_rounds", verbose_name="Ongoing Match ID", on_delete=models.CASCADE, null=True, blank=True)
@@ -327,7 +328,7 @@ class TournamentRound(models.Model):
 	winner = models.ForeignKey(TournamentPlayer, related_name="rounds_won", verbose_name="Winner", null=True, on_delete=models.SET_NULL)
 	loser = models.ForeignKey(TournamentPlayer, related_name="rounds_lost", verbose_name="Loser", null=True, on_delete=models.SET_NULL)
 	steg_data = models.JSONField(verbose_name="Steg Data", null=True, blank=True)
-	screenshot = models.ImageField(upload_to="tournament_screens/", verbose_name="Screenshot", null=True)
+	screenshot = models.ImageField(upload_to="rounds/", verbose_name="Screenshot", null=True)
 
 	class Meta:
 		verbose_name = "Group Match Round"
@@ -372,6 +373,7 @@ class QualifierSubmission(models.Model):
 	#This will need to be tweaked if going to allow multiple qualifiers for a tourney
 	player = models.ForeignKey(TournamentPlayer, related_name="qualifiers", verbose_name="Submittor", on_delete=models.CASCADE)
 	submit_time = models.DateTimeField(verbose_name="Submission Time", auto_now_add=True)
+	screenshot = models.ImageField(upload_to="qualifiers/", verbose_name="Screenshot", null=True)
 	qualifier = models.ForeignKey(TournamentQualifier, related_name='submissions', verbose_name="Tournament Qualifier", on_delete=models.CASCADE)
 	steg_json = models.JSONField(verbose_name="Steg Data", default=dict, blank=True)
 

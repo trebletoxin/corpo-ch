@@ -10,6 +10,7 @@ import settings
 from django.utils import timezone
 from redis import asyncio as aioredis
 from dotenv import load_dotenv
+import tasks
 
 dirname = os.path.dirname(sys.argv[0]) or '.'
 sys.path.append(f"{dirname}/modules") # This should be able to die soon
@@ -28,10 +29,9 @@ class CorpoDbot(commands.Bot):
 		
 		# cogs
 		cogList = [
-			#'fun',
-			#'chcmds',
+			'chcmds',
 			'tourneycmds',
-			#'qualifiercmds'
+			'qualifiercmds',
 			'ownercmds'
 		]
 

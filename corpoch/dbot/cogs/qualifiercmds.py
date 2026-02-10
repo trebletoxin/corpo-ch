@@ -1,181 +1,214 @@
-import platform, json, base64, io, os
-from datetime import datetime
+import json, base64, io, os
 
 import discord
 import pytz
 from discord.ext import commands
 from discord.ui import *
 from discord.enums import ComponentType, InputTextStyle
+from django.db.models.functions import Now
+from asgiref.sync import sync_to_async
+from django.utils import timezone
 
-from corpoch.models import Tournament, TournamentPlayer, TournamentQualifier
+from corpoch.models import Tournament, TournamentBracket, TournamentPlayer, TournamentQualifier
+from corpoch.providers import CHOpt, CHStegTool
 
-import chutils
-import gsheets
+class QualifierSelect(discord.ui.Select):
+	def __init__(self, quali):
+		self.quali = quali
+		self.retOpts = {}
+
+	async def init(self):
+		qualis = []
+		for qualifier in self.quali.qualifiers:
+			retOpts[qualifier.name] = bracket
+			qualis.append(discord.SelectOption(label=str(qualifier)))
+		super().__init__(max_values=1, options=qualis, custom_id="bracket_sel")
+
+	async def callback(self, interaction: discord.Integration):
+		qualifier = self.retOpts[self.values[0]]
+		if qualifier.channel != self.quali.ctx.channel.id:
+			await interaction.respond(f"Please run command in channel (https://discord.com/{self.quali.tourney.guild}/{qualifier.channel}) to submit!", ephemeral=True, delete_after=10)
+		else:
+			self.quali.qualifier = qualifier
+
+class ScreenshotModal(discord.ui.DesignerModal):
+	def __init__(self):
+		self.screen = None
+		file = discord.ui.Label("Screenshot of your qualifier run to upload", discord.ui.FileUpload(max_values=1, required=True))
+		super().__init__(discord.ui.TextDisplay("Screenshot Submission"), file, *args, **kwargs)
+
+	async def callback(self, interaction: discord.Interaction):
+		self.screen = self.children[1].item.values[0]
+		await interaction.respond("Processing, wait for embed to update", ephemeral=True, delete_after=5)
+
+class QualiPlayerSel(discord.ui.Select):
+	def __init__(self, quali):
+		self.quali = quali
+		self.retOpts = {}
+		opts = []
+		for i, player in enumerate(self.quali.stegData['players']):
+			self.retOpts[player['profile_name']] = i
+			opts.append(discord.SelectOption(label=player['profile_name']))
+		super().__init__(max_values=1, options=opts, custom_id="bracket_sel")
+
+	async def callback(self, interaction: discord.Interaction):
+		#Purge all non-selected players from steg data
+		self.quali.stegData['players'] = [ ply for i, ply in enumerate(self.quali.stegData['players']) if i == self.retOpts[self.values[0]]]
 
 class DiscordQualifierView(discord.ui.View):
-	def __init__(self, ctx, chUtils, submission):
+	def __init__(self, ctx):
 		super().__init__(timeout = None)
 		self.ctx = ctx
-		self.chUtils = chUtils
-		self.submission = submission
 		self.qualifier = None
+		self.qualifiers = []
+		self.stegData = None
 		self.tourney = None
-		self.acknowledged = False
+		self.steg = CHStegTool()
+		self.doneStartup = False
 
 		cancel = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancelBtn")
 		cancel.callback = self.cancelBtn
 		self.add_item(cancel)
 
-		submit = discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submitBtn")
-		submit.callback = self.submitBtn
-		self.add_item(submit)
+		upload = discord.ui.Button(label="Upload Screenshot", custom_id="screenBtn")
+		upload.callback = self.screenBtn
+		self.add_item(upload)
 
-	#I don't really like using two bool's here for differing output - dirty but works
-	async def init(self, viewInit=True, showRules=False) -> bool:
-		await self.ctx.defer(ephemeral=True)
-		self.tourney = Tournament.objects.filter(serverid=self.ctx.guild.id, active=True)
-		#qualifiers = await self.sql.getActiveQualifiers(self.ctx.guild.id)
-		qualifiers = []
-		for quali in self.tourney.qualifier_config:
-			if datetime.now(pytz.timezone('UTC')) < quali.end:
-				qualifiers.append(quali)
+		self.submit = discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submitBtn")
+		self.submit.callback = self.submitBtn
+		self.submit.disabled = True
+		self.add_item(self.submit)
 
-		if len(qualifiers) > 1:
-			await self.ctx.respond("I'm not configured to support multiple qualifiers in a tournament - Notifiy my devs for help", ephemeral=True)		
-			return False
-		elif len(qualifiers) == 0:
+	async def show(self):
+		if not self.doneStartup:
+			await self.ctx.defer(ephemeral=True)
+			self.tourney = await Tournament.objects.select_related('config').aget(guild=self.ctx.guild.id, active=True)
+			if not self.tourney:
+				await self.ctx.respond("There are no active tournaments running in this server at this time.", ephemeral=True)
+				return
+			if not self.qualifier:
+				async for qualifier in TournamentQualifier.objects.select_related('chart', 'bracket').all().filter(tournament=self.tourney, end_time__gte=timezone.now()):
+					self.qualifiers.append(qualifier)
+
+		embeds = []
+		if self.qualifier == None and len(self.qualifiers) > 1:
+			qualiSel = QualifierSelect(self)
+			await qualiSel.init()
+			self.add_item(qualiSel)
+			embeds.append(self.buildQualiSelEmbed())
+		elif self.qualifier == None and len(self.qualifiers) == 0:
 			await self.ctx.respond("There are no active qualifiers running in this server at this time.", ephemeral=True)
-			return False
-
-		self.qualifier = qualifiers[0]
-		if showRules:
-			await self.ctx.respond(embed=self.buildRulesEmbed(fullRules=True), ephemeral=True)
 			return
+		elif self.qualifier == None:#Only one qualifier
+				self.qualifier = self.qualifiers[0]
 
-		if viewInit:
-			self.stegData = await self.chUtils.getStegInfo(self.submission)
+		if self.qualifier:
+			embeds.append(self.buildRulesEmbed())
 
-		if viewInit:
-			if self.stegData == None:
-				await self.ctx.respond("Submitted screenshot is not a valid in-game Clone Hero screenshot", ephemeral=True)
-				return
-			elif self.stegData['checksum'] != self.qualifier['checksum']:
-				await self.ctx.respond("Submitted screenshot is not for this qualifier", ephemeral=True)
-				return
-
-		prevRun = TournamentQualifier.objects.filter(player=self.ctx.user.id, tournament=self.tourney['id'])
-		if prevRun is None:
-			if viewInit:
-				await self.ctx.respond(embed=self.buildRulesEmbed(), view=self, ephemeral=True)
+		if self.stegData:
+			embeds.append(self.steg.buildStatsEmbed("Qualifier Submission", self.stegData))
+			if len(self.stegData['players']) > 1:
+				embeds.append(self.buildPlySelEmbed())
+				self.add_item(QualiPlayerSel(self))
 			else:
-				await self.ctx.respond(f"You've not submitted a qualifier for {self.tourney['config']['name']}! Use `/qualifier submit` to submit one!")
-		else:
-			self.stegData = prevRun['stegjson']
-			if viewInit:
-				await self.ctx.respond(f"You already submitted a qualifier for {self.tourney['config']['name']}!", embed=self.chUtils.buildStatsEmbed("Qualifier Submission Results", self.stegData, True), ephemeral=True)
-			else:
-				await self.ctx.respond(f"Here's the qualifier info you submitted for {self.tourney['config']['name']}!", embed=self.chUtils.buildStatsEmbed("Qualifier Submission Results", self.stegData, True), ephemeral=True)
-
-	async def submitBtn(self, interaction: discord.Interaction):
-		await interaction.response.defer()
-		if not self.acknowledged:
-				self.stegData['submission_timestamp'] = datetime.now(pytz.timezone('UTC')).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-				await self.ctx.edit(embed=self.chUtils.buildStatsEmbed("Qualifier Submission Results", self.stegData, True), view=self)
-				self.acknowledged = True
-		else:
-			#Needs to be tweaked to support multiplayer qualifier runs
-			print(f"Submitting qualifier submission for {self.ctx.user.global_name} - {self.stegData["players"][0]["profile_name"]} - {self.stegData['score_timestamp']}")
-			#Save Screenshot
-			outDir = f"steg/qualifiers/{self.tourney['config']['name']}".replace(" ", "")
-			if not os.path.isdir(outDir):
-				os.makedirs(outDir)
-
-			await self.submission.save(f"{outDir}/{self.submission.filename}", seek_begin=True)
+				embeds.append(self.buildNoticeEmbed())
+				embeds.append(self.buildSubmitEmbed())
+				self.submit.disabled = False
 			
-			#Set image URL - THIS NEEDS CLEANUP TO AVOID HARD CODED LINK - also make safe url encoding
-			self.stegData['image_url'] = f"https://qualifiers.corpo-ch.org/{self.tourney['config']['name'].replace(" ", "")}/{self.stegData['image_name']}"
+		if not self.doneStartup:
+			self.doneStartup = True
+			await self.ctx.respond(embeds=embeds, view=self)
+		else:
+			await self.ctx.edit(embeds=embeds, view=self)
 
-			if await self.sql.saveQualifier(self.ctx.user.id, self.tourney['id'], self.stegData):
-				#Submit to Sheet
-				gs = gsheets.GSheets(self.ctx.bot, self.sql, self.tourney['id'])
-				await gs.init("qualifier")
-				if not await gs.submitQualifier(self.ctx.user, self.stegData):
-					await interaction.followup.send("Something went wrong in the gsheets setup/submission", ephemeral=True)
-					return
+	@sync_to_async
+	def load_bracket_qualifier(self):
+		pass
 
-				await self.ctx.interaction.delete_original_response()
-				await interaction.followup.send("Submitted!", ephemeral=True)
-			else:
-				await self.ctx.interaction.delete_original_response()
-				await interaction.followup.send("Error in submission, please try to run this command again or report this to my devs", ephemeral=True)
+	@sync_to_async
+	def save_qualifier(self):
+		pass
+
+	def load_player_qualifier(self):
+		pass
 
 	async def cancelBtn(self, interaction: discord.Interaction):
 		await interaction.response.edit_message(content="Closing", embed=None, view=None, delete_after=1)
 		self.stop()
 
-	def buildRulesEmbed(self, fullRules=False) -> discord.Embed:
-		embed = discord.Embed(colour=0x3FFF33)
+	async def screenBtn(self, interaction: discord.Interaction):
+		modal = ScreenshotModal(title="Screenshot Submission")
+		await interaction.response.send_modal(modal=modal)
+		await modal.wait()
+		self.stegData = await self.steg.getStegInfo(modal.screen)
+		await self.show()
+
+	async def submitBtn(self, interaction: discord.Interaction):
+		await interaction.response.defer()
+		await self.ctx.interaction.delete_original_response()
+		await interaction.followup.send(f"{self.ctx.user.mention} submitted a qualifier for {self.qualifier}!", ephemeral=False)
+
+	def buildQualiSelEmbed(self) -> discord.Embed:
+		embed = discord.Embed(colour=0xFF8000)
+		embed.title = "Multiple active qualifiers!"
+		embed.add_field(name="Directions", value="Pick a qualifier to submit for.")
+		return embed
+
+	def buildPlySelEmbed(self) -> discord.Embed:
+		embed = discord.Embed(colour=0xFF8000)
+		embed.title = "Multiple players in qualifier screenshot!"
+		embed.add_field(name="Directions", value="In the drop-down below, pick which player you are.")
+		return embed
+
+	def buildNoticeEmbed(self) -> discord.Embed:
+		embed = discord.Embed(colour=0xEEFF00)
+		embed.title = "Notices"
+		embed.add_field(name="Player Name", value="The player-name in this submission will be used to track progress through this tournament\nYou will need to use it for all official matches (minus formatting/spaces)", inline=False)
+		embed.add_field(name="Screenshots Notice", value="Matches for this tournament will be tracked using in-game taken screenshots.\nPlease ensure that you have automatic screenshots enabled!", inline=False)
+		return embed
+
+	def buildSubmitEmbed(self) -> discord.Embed:
+		embed = discord.Embed(colour=0xEEFF00)
+		embed.title = "Submit"
+		embed.add_field(name="Directions", value="If you agree to everything, hit submit to complete your submission!", inline=False)
+		return embed
+
+	def buildRulesEmbed(self) -> discord.Embed:
+		embed = discord.Embed(colour=0xFF2800)
 		embed.title = "Qualifier Submission Rules"
-		embed.add_field(name=f"{self.tourney['config']['name']} Tourney Rules", value=self.tourney['config']['rules'], inline=False)
-		embed.add_field(name=f"Qualifier Rules", value=self.qualifier['rules'], inline=False)
+		embed.add_field(name=f"{self.tourney.name} Rules", value=self.tourney.config.rules, inline=False)
+		embed.add_field(name=f"Qualifier Rules", value=self.qualifier.rules, inline=False)
 
-		if fullRules:
-			if "form_link" in self.qualifier:
-				embed.add_field(name="Qualifier Form Link", value=f"[Link Here]({self.qualifier['form_link']})", inline=False)
+		if self.qualifier.form_link and self.qualifier.form_link != "":
+			embed.add_field(name="Qualifier Form Link", value=f"[Link Here]({self.qualifier.form_link})", inline=False)
 
-			embed.add_field(name=f"Qualifier Chart Link", value=f"[Download Link Here]({self.qualifier["chart_link"]})", inline=False)
-		else:
-			embed.add_field(name=f"Directions", value="If you agree to these rules, please hit submit to review your submitted qualifier before submission.\n\nIf you do not get a follow up message from me confirming, please notify Jetsurf or Masonjar", inline=False)
-
+		embed.add_field(name="Qualifier Chart Link", value=f"[Link Here]({self.qualifier.chart.url})", inline=False)
+		embed.add_field(name="Agreement", value="By submitting a qualifier, you are agreeing to these rules")
 		return embed
 
 class QualifierCmds(commands.Cog):
 	def __init__(self, bot):
 		self.bot = bot
-		self.chUtils = chutils.CHUtils()
 
 	qualifier = discord.SlashCommandGroup('qualifier','Clone Hero Tournament Qualifer Commands')
 
+	#TODO: Make a /qualifier path cmd?
+
 	@qualifier.command(name='submit', description='Submit a qualifier score for a tournament this server is running', integration_types={discord.IntegrationType.guild_install})
-	@discord.option("submission", discord.Attachment, description="Attach in-game screenshot of qualifer run", required=True)
-	async def qualifierSubmitCmd(self, ctx, submission: discord.Attachment):
-		view = DiscordQualifierView(ctx, self.chUtils, submission)
-		await view.init()	
-		await view.wait()
-		view.stop()
+	#@discord.option("submission", discord.Attachment, description="Attach in-game screenshot of qualifer run", required=True)
+	async def qualifierSubmitCmd(self, ctx):#, submission: discord.Attachment):
+		view = DiscordQualifierView(ctx)
+		await view.show()
 	
 	@qualifier.command(name='status', description='Shows the status of your qualifier for an active tournament', integration_types={discord.IntegrationType.guild_install})
 	async def qualifierSubmitCmd(self, ctx):
-		view = DiscordQualifierView(ctx, self.chUtils, None)
-		await view.init(viewInit=False)
+		view = DiscordQualifierView(ctx)
+		await view.init()
 
 	@qualifier.command(name='info', description='Shows the info for an active tournament qualifier', integration_types={discord.IntegrationType.guild_install})
 	async def qualifierSubmitCmd(self, ctx):
-		view = DiscordQualifierView(ctx, self.chUtils, None)
-		await view.init(viewInit=False, showRules=True)
-
-	#Keep as a fail-safe - if gsheets submissions breaks, this can be used for data pull - just doesn't have a restriction for staff-role only execution
-	@qualifier.command(name='submissions', description='Retrieve a CSV of all submissions for the active tournament', integration_types={discord.IntegrationType.guild_install})
-	@commands.is_owner()
-	async def qualifierCSVCmd(self, ctx):
-		# pull data
-		tourney = self.bot.tourneyDB.getActiveTournies(ctx.guild.id)
-		if type(tourney) != dict: # no active tourney found
-			await ctx.respond("No active tournament was found.",ephemeral=True)
-			return
-		
-		submissions = self.bot.tourneyDB.getTourneyQualifierSubmissions(tourney.id)
-
-		# format data
-		csv = "Player,Score,Notes Missed,Overstrums,Ghosts\n"
-		for i in submissions:
-			csv += f"{i["profile_name"]},{i["score"]},{i["notes_hit"]},{i["total_notes"] - i["notes_hit"]},{i["overstrums"]},{i["frets_ghosted"]}\n"
-
-		# post data
-		csvF = io.StringIO()
-		csvF.write(csv)
-		await ctx.respond(file=discord.File(csvF,filename="qualifier_submissions.csv"),ephemeral=True)
-		csvF.close()
+		view = DiscordQualifierView(ctx)
+		await view.init()
 
 	@commands.Cog.listener()
 	async def on_application_command_error(self, ctx: discord.ApplicationContext, error: discord.DiscordException):
@@ -186,3 +219,5 @@ class QualifierCmds(commands.Cog):
 
 def setup(bot):
 	bot.add_cog(QualifierCmds(bot))
+
+

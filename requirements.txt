@@ -1,5 +1,4 @@
 asgiref
-cryptography
 sqlparse
 Django
 dotenv
@@ -8,7 +7,10 @@ mysqlclient
 requests
 celery
 django-multiselectfield
+django-encrypted-json-fields
 django-admin-sortable2
 aiohttp
 redis
 django-celery-beat
+pytesseract
+pillow

@@ -1,0 +1,28 @@
+#Django ENV Settings
+SECRET_KEY = '**DJANGO SECRET KEY**'
+DEBUG = False
+
+#Corpo CH Settings
+CHOPT_PATH = "/home/USER/corpo-ch/corpoch/utils/CHOpt"
+
+#Discord Settings
+BOT_ID = "**BOT ID**"
+HOME_GUILD_ID = "**HOME GUILD ID**"
+BOT_SECRET = "**BOT SIGNING SECRET**"
+BOT_TOKEN = "**BOT TOKEN**"
+BASE_URL = "**DOMAIN NAME**"
+REDIRECT_URI = "https://${BASE_URL}/auth"
+AUTH_URL_DISCORD = "https://discord.com/oauth2/authorize?client_id=${client_id}&response_type=code&redirect_uri=https%3A%2F%2F${BASE_URL}%2Fauth&scope=identify"
+
+#MySQL Settings
+MYSQL_HOST = "**DB IP**"
+MYSQL_USER = "**DB USER**"
+MYSQL_PW = "**DB PW**"
+MYSQL_DB = "**DB NAME**"
+
+# Celery Settings
+CELERY_BROKER_URL = '**REDIS IP/DB**'
+CELERY_RESULT_BACKEND = '**REDIS_IP/DB**'
+
+# Django Encrypted Fields Key
+DB_CRYPT_KEY = '**DJANGO ENCRYPTED FIELDS KEY**'

@@ -1,67 +1,18 @@
-import requests, json, struct, io, hashlib, re, gspread, asyncio, discord
+import requests, json, struct, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
 from datetime import datetime
+from PIL import Image, ImageEnhance
+from django.db import models
 from corpoch import __user_agent__
+from corpoch import settings 
+from corpoch.models import GSheetAPI, Chart
 
-class EncoreClient:
-	def __init__(self, raw_search: bool=False, limit_results: bool=False):
-		self._session = requests.Session()
-		self._session.headers = {
-			'User-Agent' : __user_agent__,
-			"Content-Type": "application/json"
-		}
-		# encore.us API urls
-		self._encore={}
-		self._encore['gen'] = 'https://api.enchor.us/search'
-		self._encore['adv'] = 'https://api.enchor.us/search/advanced'
-		self._encore['dl'] = 'https://files.enchor.us/'
+#TODO: Add requests-cached to not hit encore hard for /chopt runs
 
-		self.limit_results = limit_results
-		self.raw_search = raw_search
+#Big shoutout to @mirjay for this until they actually get a proper collaborator role on the project
+class SNGHandler:
+	def __init__(self):
+		pass
 
-	def search(self, query: dict) -> dict:
-		d = { 'number' : 1, 'page' : 1 }
-		blake3 = query.pop('blake3')
-
-		for i in query:
-			d[i] = { 'value' : query[i], 'exact' : True, 'exclude' : False }
-
-		resp = self._session.post(self._encore['adv'], data = json.dumps(d))
-		#remove dupelicate chart entries from search
-		theJson = resp.json()['data']
-		for i, chart1 in enumerate(theJson):
-			for j, chart2 in enumerate(theJson):
-				if chart1['ordering'] == chart2['ordering'] and i != j:
-					del theJson[j]
-
-		#print(json.dumps(theJson, indent=4))
-		if self.raw_search:
-			retData = theJson
-		else:
-			retData = []
-			atts = ['name','artist','md5','charter','album','hasVideoBackground']
-			for i, v in enumerate(theJson):
-				if i > 10 and self.limit_results:
-					break
-				if blake3 and blake3 not in v['md5']:
-						continue
-
-				s = {}
-				d = theJson[i]
-				for j in atts:
-					s[j] = d[j]
-
-			retData.append(s)
-
-		return retData
-
-	def url(self, encoreChart: dict) -> str:
-		return f"{self._encore['dl']}{encoreChart['md5']}{('_novideo','')[not encoreChart['hasVideoBackground']]}.sng"
-
-	def download(self, encoreChart: dict) -> str:
-		return self._session.get(self.url(encoreChart)).content
-
-	#Big shoutout to @mirjay for this until they actually get a proper collaborator role on the project
-	#Move these to a separate .sng provider class?
 	def parse_fileMetaArray(self, data) -> dict:
 		byte_stream = io.BytesIO(data)
 		i = 0 #lets hard bound this for now
@@ -83,8 +34,8 @@ class EncoreClient:
 			i += 1
 		return None #Fail
 
-	def get_md5(self, encoreChart: dict) -> str:
-		all_bytes = self.download(encoreChart)
+	#Meant to be fed in raw content - this may be able to be improved?
+	def get_chart_data(self, all_bytes: bytes) -> bytes:
 		all_bytes_stream = io.BytesIO(all_bytes)
 		all_bytes_stream.seek(10)
 		
@@ -113,26 +64,231 @@ class EncoreClient:
 		for i in range(len(file_Chart_bytes_array)):
 			xorKey = xorMask[i % 16] ^ (i % 256)
 			unmasked_file_Chart_bytes[i] = file_Chart_bytes_array[i] ^ xorKey
-		return hashlib.md5(bytes(unmasked_file_Chart_bytes)).hexdigest()
 
-class SngCli:
-	def __init__(self):
-		# SngCli Converter
-		self._path = 'SngCli/SngCli.exe' if platform.system() == 'Windows' else 'SngCli/SngCli'
-		self._input = 'SngCli/input'
-		self._output = 'SngCli/output'
+		return bytes(unmasked_file_Chart_bytes)
+
+	def get_md5(self, content) -> str:
+		return hashlib.md5(self.get_chart_data(content)).hexdigest()
+
+class EncoreClient:
+	def __init__(self, limit: int=24, exact: bool=True):
+		#limit 24 for discord view select options limit
+		self._session = requests.Session()
+		self._session.headers = {
+			'User-Agent' : __user_agent__,
+			"Content-Type": "application/json"
+		}
+		# encore.us API urls
+		self._encore={}
+		self._encore['gen'] = 'https://api.enchor.us/search'
+		self._encore['adv'] = 'https://api.enchor.us/search/advanced'
+		self._encore['dl'] = 'https://files.enchor.us/'
+
+		self.limit = limit
+		self.exact = exact
+		self.sng = SNGHandler()
+
+	def search(self, query: dict) -> dict:
+		d = { 'number' : 1, 'page' : 1 }
+		if "blake3" in query:
+			blake3 = query.pop('blake3')
+		else:
+			blake3 = None
+
+		for i in query:
+			d[i] = { 'value' : query[i], 'exact' : self.exact, 'exclude' : False }
+
+		resp = self._session.post(self._encore['adv'], data = json.dumps(d))
+		#remove dupelicate chart entries from search
+		theJson = resp.json()['data']
+		for i, chart1 in enumerate(theJson):
+			for j, chart2 in enumerate(theJson):
+				if chart1['ordering'] == chart2['ordering'] and i != j:
+					del theJson[j]
+
+		#print(json.dumps(theJson, indent=4))
+		retData = []
+		atts = ['name','artist','md5','charter','album','hasVideoBackground']
+		for i, v in enumerate(theJson):
+			if i > self.limit:
+				break
+			if blake3 != None and blake3 not in v['md5']:
+				continue
+
+			s = {}
+			d = theJson[i]
+			for j in atts:
+				s[j] = d[j]
+			retData.append(s)
+
+		return retData
+
+	def url(self, chart: dict) -> str:
+		return f"{self._encore['dl']}{chart['md5']}{('_novideo','')[not chart['hasVideoBackground']]}.sng"
+
+	def download_from_chart(self, chart: dict) -> str:
+		return self._session.get(self.url(chart)).content
+
+	def download_from_url(self, url: str) -> str:
+		return self._session.get(url).content
+
+	def get_md5_from_chart(self, chart) -> str:
+		return self.sng.get_md5(self.download_from_chart(chart))
+
+	def get_md5_from_url(self, url) -> str:
+		return self.sng.get_md5(self.download_from_url(url))
 
 class CHOpt:
 	def __init__(self):
-		self._path = 'CHOpt/CHOpt.exe' if platform.system() == 'Windows' else 'CHOpt/CHOpt'
+		self._path = os.getenv("CHOPT_PATH")
+		self._chopt = f"{self._path}/CHOpt.exe" if platform.system() == 'Windows' else f"{self._path}/CHOpt"
+		self._scratch = f"{self._path}/scratch"
+		self._output = os.getenv("CHOPT_OUTPUT")
+		self._url = os.getenv("CHOPT_URL")
+		self._encore = EncoreClient()
+		self._sng = SNGHandler()
+		#Create dirs
+		if not os.path.isdir(self._scratch):
+			os.makedirs(self._scratch)
+		if not os.path.isdir(self._output):
+			os.makedirs(self._output)
+
+	def _prep_chart(self, content):
+		outFile = f"{self._scratch}/notes.chart"
+		with open(outFile, 'wb') as f:
+			f.write(content)
+		return outFile
+
+	#Meant to be fed in from the 
+	def get_path_image(self, chart, opts: dict) -> str:
+		if isinstance(chart, Chart):
+			url = chart.url
+			content = self._encore.download_from_url(url)
+		elif isinstance(chart, dict):
+			url = self._encore.url(chart)
+			content = self._encore.download_from_chart(chart)
+		else:
+			print("get_path_image called incorrectly, chart not type Chart or encore chart dict")
+			return None
+
+		chartFile = self._prep_chart(self._sng.get_chart_data(content))
+		fileId = uuid.uuid1()
+		outPng = f"{self._output}/{fileId}.png"
+		print(f"Output PNG: {outPng}")
+		choptCall = f"{self._chopt} -s {opts['speed']} --ew {opts['whammy']} --sqz {opts['squeeze']} -f {chartFile} -i guitar -d expert {'' if opts['output_path'] else '-b'} -o {outPng}"
+		try:
+			subprocess.run(choptCall, check=True, shell=True, stdout=subprocess.DEVNULL)
+		except Exception as e:
+			print(f"CHOpt call failed with exception: {e}")
+			os.remove(chartFile)
+			return None
+
+		os.remove(chartFile)
+		return f"{self._url}/{fileId}.png"
+
+class CHStegTool:
+	def __init__(self):
+		self._path = os.getenv("CHSTEG_PATH")
+		self._steg = f"{self._path}/ch_steg_reader.exe" if platform.system() == "Windows" else f"{self._path}/ch_steg_reader"
+		self._media_root = os.getenv("MEDIA_ROOT")
+		self._scratch = f"{self._path}/scratch"
+		if not os.path.isdir(self._scratch):
+			os.makedirs(self._scratch)
+
+	def _get_over_strums(self, imageName: str, roundData: dict) -> dict:
+		#print(f"OS Counts: {osCnt}")
+		img = Image.open(imageName)
+		osImg = img.crop((0, 690, 1080, 727))
+		outStr = pytesseract.image_to_string(osImg)
+		osCnt = re.findall("(?<=Overstrums )([Oo0-9]+)", outStr)
+		#Sanity check OS's before adding
+		for i, player in enumerate(roundData['players']):
+			## TODO: THIS NEEDS TO BE FIXED FOR ACTUAL ROUND DATA INFO
+			if len(osCnt) == len(roundData['players']):
+				player['overstrums'] = osCnt[i]
+			else:
+				player['overstrums'] = '-'
+
+	#TODO: Needs sync providers for django
+
+	async def _prep_image(self, image) -> str:
+		image.filename = re.sub(r'[^a-zA-Z0-9-_.]', '', image.filename)
+		out = f"{self._scratch}/{image.filename}"
+		await image.save(out, seek_begin=True)
+		return out
+
+	def _sanitize_steg(self, steg: dict):
+		steg = json.loads(steg.stdout.decode("utf-8"))
+		steg['charter_name'] = re.sub(r"(?:<[^>]*>)", "", steg['charter_name'])
+		for ply in steg['players']:
+			ply['profile_name'] = re.sub(r"(?:<[^>]*>)", "", ply['profile_name'])
+		return steg
+
+	def _call_steg(self, imagePath):
+		stegCall = f"{self._steg} --json {imagePath}"
+
+		try:
+			proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+			if proc.returncode != 0 or proc.returncode != '0':
+				output = self._sanitize_steg(proc)
+
+				if output['game_version'] in "v1.0.0.4080-final":
+					print("Running 1.0.0-4080 fixes")
+					self._get_over_strums(imagePath, output)
+					#Notes missed isn't explicitly in steg :shrug:
+					for i, player in enumerate(output['players']):
+						player["notes_missed"] = player["total_notes"] - player['notes_hit']
+
+					os.remove(imagePath)
+			else:
+				print(f"Error returned from steg tool, usually invalid chart: [ {" ".join(proc.args)} ] - {proc.stderr.decode("utf-8")}")
+				os.remove(imagePath)
+				return None
+		except Exception as e:
+			print(f"Steg Cli Failed: {e}")
+			os.remove(imagePath)
+			return None
+
+		return output
+
+	async def getStegInfo(self, image: discord.Attachment) -> dict:
+		img = await self._prep_image(image)
+		print(f"Steg Input PNG: {img}")
+		return self._call_steg(img)
+
+	def buildStatsEmbed(self, title: str, stegData: dict) -> discord.Embed:
+		embed = discord.Embed(colour=0x3FFF33)
+		embed.title = title
+
+		if 'image_url' in stegData:
+			embed.set_image(url=stegData['image_url'])
+
+		chartStr = f"Chart Name: {stegData["song_name"]}\n"
+		chartStr += f"Run Time: <t:{int(round(datetime.strptime(stegData["score_timestamp"], '%Y-%m-%dT%H:%M:%S.%fZ').timestamp()))}:f>\n"
+		chartStr += f"Game Version: {stegData['game_version']}"
+		embed.add_field(name="Submission Stats", value=chartStr, inline=False)
+
+		for i, player in enumerate(stegData["players"]):
+			plyStr = ""
+			plyStr += f"Player Name: {player["profile_name"]}\n"
+			plyStr += f"Score: {player["score"]}\n"
+			plyStr += f"Notes Hit: {player["notes_hit"]}/{player["total_notes"]} - {(player["notes_hit"]/player["total_notes"]) * 100:.2f}% {' - 👑' if player['is_fc'] else ''}\n"
+			plyStr += f"Overstrums: {player["overstrums"]}\n"
+			plyStr += f"Ghosts: {player["frets_ghosted"]}\n"
+			plyStr += f"SP Phrases: {player["sp_phrases_earned"]}/{player["sp_phrases_total"]}\n"
+			embed.add_field(name=f"Player {i+1}", value=plyStr, inline=False)
+
+		return embed
 
 class GSheets():
 	def __init__(self, tid: int):
-		self.tid = tid
-		self.gc = gspread.service_account(filename="config/gsheets-key.json")
+		self.tid = tid		
 		self.frmtBorder = {'textFormat': {'bold': False}, "horizontalAlignment": "CENTER", 'borders': {'right': {'style' : 'SOLID'}, 'left': {'style' : 'SOLID' }}}
 
+		#TODO: Make a django-admin task to resend the match data to the airtable (or any sheet)
+
 	async def init(self, sheet: str) -> bool: #sheet is an arbitrary string "qualifier", "livematch" and "stats"
+		self.gc = gspread.service_account(GSheetApi.objects.get())
 		self.tourneyConf = await self.sql.getTourneyConfig(self.tid)
 
 		if "disable_gsheets" in self.tourneyConf and self.tourneyConf['disable_gsheets']:
@@ -329,3 +485,15 @@ class GSheets():
 
 		return True
 
+
+#Keeping for future OCR use/reference
+#OCR Tweaking - Keep until v6 is dead
+#img = Image.open(imageName)
+#image = cv2.imread(imageName)
+#gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#blur = cv2.GaussianBlur(gray, (3,3), 0)
+#thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+# Morph open to remove noise and invert image
+#kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3,3))
+#opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
+#invert = 255 - opening

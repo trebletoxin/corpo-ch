@@ -5,8 +5,12 @@ from adminsortable2.admin import CustomInlineFormSet, SortableAdminBase, Sortabl
 from django.contrib import admin
 from django.contrib.contenttypes.models import ContentType
 from corpoch.models import Chart, Tournament, TournamentConfig, TournamentBracket, TournamentQualifier, TournamentPlayer, GroupSeed, TournamentRound
-from corpoch.models import TournamentMatchCompleted, TournamentMatchOngoing, BracketGroup, QualifierSubmission, CH_MODIFIERS, MatchBan
+from corpoch.models import TournamentMatchCompleted, TournamentMatchOngoing, BracketGroup, QualifierSubmission, CH_MODIFIERS, MatchBan, GSheetAPI
 from corpoch.providers import EncoreClient
+
+@admin.register(GSheetAPI)
+class GSheetAPIAdmin(admin.ModelAdmin):
+	pass
 
 @admin.register(Chart)
 class ChartAdmin(admin.ModelAdmin):
@@ -46,7 +50,7 @@ class ChartAdmin(admin.ModelAdmin):
 			chart.url = encore.url(newChart)
 			chart.name = newChart['name']
 			chart.blake3 = newChart['md5'] #Encore's md5 uses blake3
-			chart.md5 = encore.get_md5(newChart)
+			chart.md5 = encore.get_md5_from_chart(newChart)
 			chart.album = newChart['album']
 			chart.artist = newChart['artist']
 			chart.charter = newChart['charter']
@@ -86,6 +90,8 @@ class BracketGroupAdmin(SortableAdminBase, admin.ModelAdmin):
 	inlines = [SeedingInline]
 	#ordering = ['seed']
 	list_per_page = 32
+
+	## TODO: Add task akin to encore chart import for tourney charts to create+assign group roles
 
 	def tournament(self, obj):
 		return obj.bracket.tournament.short_name
