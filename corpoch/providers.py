@@ -21,16 +21,17 @@ class SNGHandler:
 		else:
 			results = []
 			files = os.listdir(chartFolder)
+			
+			valid_picture_names = ("album.","background.","highway.")
+			valid_picture_extensions = ("png","jpg","jpeg")
+			valid_music_names = ("guitar.","bass.","rhythm.","vocals.","vocals_1.","vocals_2.","drums.","drums_1.","drums_2.","drums_3.","drums_4.","keys.","song.","crowd.","preview.")
+			valid_music_extensions = ("mp3","ogg","opus","wav")
+			valid_video_names = ("video.")
+			valid_video_extensions = ("mp4","avi","webm","vp8","ogv","mpeg")
+			valid_notes = ["notes.chart","notes.mid"]
+			valid_songini = "song.ini"
+			
 			for file in files:
-				valid_picture_names = ("album.","background.","highway.")
-				valid_picture_extensions = ("png","jpg","jpeg")
-				valid_music_names = ("guitar.","bass.","rhythm.","vocals.","vocals_1.","vocals_2.","drums.","drums_1.","drums_2.","drums_3.","drums_4.","keys.","song.","crowd.","preview.")
-				valid_music_extensions = ("mp3","ogg","opus","wav")
-				valid_video_names = ("video.")
-				valid_video_extensions = ("mp4","avi","webm","vp8","ogv","mpeg")
-				valid_notes = ["notes.chart","notes.mid"]
-				valid_songini = "song.ini"
-
 				if ((file.lower().startswith(valid_picture_names) and file.lower().endswith(valid_picture_extensions)) or
 					(file.lower().startswith(valid_music_names) and file.lower().endswith(valid_music_extensions)) or
 					(file.lower().startswith(valid_video_names) and file.lower().endswith(valid_video_extensions)) or
