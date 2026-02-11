@@ -14,3 +14,4 @@ redis
 django-celery-beat
 pytesseract
 pillow
+requests-cache

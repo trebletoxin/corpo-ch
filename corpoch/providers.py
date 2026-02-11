@@ -1,4 +1,4 @@
-import requests, json, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
+import requests_cache, json, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
 from datetime import datetime
 from random import randbytes
 from PIL import Image, ImageEnhance
@@ -7,9 +7,6 @@ from corpoch import __user_agent__
 from corpoch import settings 
 from corpoch.models import GSheetAPI, Chart, Tournament, TournamentQualifier
 
-#TODO: Add requests-cached to not hit encore hard for /chopt runs
-
-#Big shoutout to @mirjay for this until they actually get a proper collaborator role on the project
 class SNGHandler:
 	def __init__(self, chartFolder: os.path=None, sngData: bytes=None, playlist: str=None):
 		if chartFolder is None and sngData is None:
@@ -381,7 +378,8 @@ class CHStegTool:
 		return out
 
 	def _sanitize_steg(self, steg: dict):
-		steg = json.loads(steg.stdout.decode("utf-8"))
+		print(f"DEBUG: STEG: {steg}")
+		steg = json.loads(steg.stdout.decode())
 		steg['charter_name'] = re.sub(r"(?:<[^>]*>)", "", steg['charter_name'])
 		for ply in steg['players']:
 			ply['profile_name'] = re.sub(r"(?:<[^>]*>)", "", ply['profile_name'])
@@ -390,27 +388,27 @@ class CHStegTool:
 	def _call_steg(self, imagePath):
 		stegCall = f"{self._steg} --json {imagePath}"
 
-		try:
-			proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			if proc.returncode != 0 or proc.returncode != '0':
-				output = self._sanitize_steg(proc)
+		#try:
+		proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
+		if proc.returncode != 0 or proc.returncode != '0':
+			output = self._sanitize_steg(proc)
 
-				if output['game_version'] in "v1.0.0.4080-final":
-					print("Running 1.0.0-4080 fixes")
-					self._get_over_strums(imagePath, output)
-					#Notes missed isn't explicitly in steg :shrug:
-					for i, player in enumerate(output['players']):
-						player["notes_missed"] = player["total_notes"] - player['notes_hit']
+			if output['game_version'] in "v1.0.0.4080-final":
+				print("Running 1.0.0-4080 fixes")
+				self._get_over_strums(imagePath, output)
+				#Notes missed isn't explicitly in steg :shrug:
+				for i, player in enumerate(output['players']):
+					player["notes_missed"] = player["total_notes"] - player['notes_hit']
 
-					os.remove(imagePath)
+				os.remove(imagePath)
 			else:
 				print(f"Error returned from steg tool, usually invalid chart: [ {" ".join(proc.args)} ] - {proc.stderr.decode("utf-8")}")
 				os.remove(imagePath)
 				return None
-		except Exception as e:
-			print(f"Steg Cli Failed: {e}")
-			os.remove(imagePath)
-			return None
+		#except Exception as e:
+		#	print(f"Steg Cli Failed: {e}")
+		#	os.remove(imagePath)
+		#	return None
 
 		return output
 
