@@ -119,10 +119,10 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
 
-STATIC_URL = '/static/'
-STATIC_ROOT = "/var/www/ch"
-MEDIA_ROOT = '/var/www/ch/images/'
-MEDIA_URL = '/images/'
+STATIC_URL = os.getenv("STATIC_URL")
+STATIC_ROOT = os.getenv("STATIC_ROOT")
+MEDIA_ROOT = os.getenv("MEDIA_ROOT")
+MEDIA_URL = os.getenv("MEDIA_URL")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
