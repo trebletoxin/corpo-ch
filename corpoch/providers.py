@@ -274,7 +274,7 @@ class EncoreClient:
 		for i, v in enumerate(theJson):
 			if i > self.limit:
 				break
-			if blake3 != None and blake3 not in v['md5']:
+			if blake3 != None and blake3 not in v['md5'].upper():
 				continue
 
 			s = {}

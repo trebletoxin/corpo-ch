@@ -27,7 +27,6 @@ class CorpoDbot(commands.Bot):
 		self.redis = self.loop.run_until_complete(aioredis.from_url(os.getenv("CELERY_BROKER_URL"), encoding="utf-8", decode_responses=True))
 		print(f"redis pool started {os.getenv("CELERY_BROKER_URL")}")
 		self.message_connection = Connection(os.getenv("CELERY_BROKER_URL"))
-		#self.chan = self.message_connection.channel()
 		queuename = "corpoch.dbot"
 		queue_keys = [f"{queuename}",
               f"{queuename}\x06\x161",
@@ -47,7 +46,7 @@ class CorpoDbot(commands.Bot):
 		# cogs
 		cogList = [
 			'chcmds',
-			#'tourneycmds',
+			'tourneycmds',
 			'qualifiercmds',
 			'ownercmds'
 		]
@@ -68,12 +67,11 @@ class CorpoDbot(commands.Bot):
 		print(f"--- Shutting down at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())} ---")
 
 	def on_queue_message(self, body, message):
-		headers = message.headers
-		_task = headers["task"].replace("corpoch.dbot.tasks.", '')
-		_task = getattr(bot_tasks, _task, False)
+		task = message.headers["task"].replace("corpoch.dbot.tasks.", '')
+		_task = getattr(bot_tasks, task, False)
 		_args = body[0]
 		_kwargs = body[1]
-		print(f"Got task.{_task}({_args}, {_kwargs}) - adding to queue")
+		print(f"Got task.{task}({_args}, {_kwargs})")
 		message.ack()
 		self.tasks.append((_task, _args, _kwargs))
 
@@ -110,7 +108,7 @@ class CorpoDbot(commands.Bot):
 		while message_avail:
 			try:
 				with self.message_consumer:
-					self.message_connection.drain_events(timeout=1)
+					self.message_connection.drain_events(timeout=0.01)
 			except timeout:
 				message_avail = False
 		if not bot_tasks.run_tasks.is_running():
