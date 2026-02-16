@@ -124,7 +124,7 @@ class GroupSelect(discord.ui.Select):
 	async def init(self):
 		groups = []
 		async for group in self.match.bracket.groups.all():
-			self.retOps[group.name] = group
+			self.retOpts[group.name] = group
 			groups.append(discord.SelectOption(label=group.name))
 		super().__init__(max_values=1, options=groups, custom_id="group_sel")
 

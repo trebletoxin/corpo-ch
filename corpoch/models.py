@@ -202,7 +202,7 @@ class BracketGroup(models.Model):
 	id = models.AutoField(primary_key=True, db_index=True)
 	bracket = models.ForeignKey(TournamentBracket, related_name="groups", verbose_name="Bracket Groups", on_delete=models.CASCADE)
 	name = models.CharField(verbose_name="Group Name", max_length=8, default="A")
-	discord = models.BigIntegerField(verbose_name="Group Role Discord ID", null=True, blank=True, db_index=True)
+	role = models.BigIntegerField(verbose_name="Discord Group Role ID", null=True, blank=True, db_index=True)
 
 	class Meta:
 		verbose_name = "Bracket Group"

@@ -276,7 +276,7 @@ class EncoreClient:
 		for i, v in enumerate(theJson):
 			if i > self.limit:
 				break
-			if blake3 != None and blake3 not in v['md5']:
+			if blake3 != None and blake3 not in v['md5'].upper():
 				continue
 
 			s = {}
@@ -441,6 +441,7 @@ class CHStegTool:
 				self.output = None
 		except Exception as e:
 			print(f"STEG: Call failed: {e}")
+			self.output = None
 
 	async def getStegInfo(self, image: discord.Attachment) -> dict:
 		await self._prep_image(image)
@@ -450,12 +451,12 @@ class CHStegTool:
 	def buildStatsEmbed(self, title: str) -> discord.Embed:
 		embed = discord.Embed(colour=0x3FFF33)
 		embed.title = title
-
 		if 'players' in self.output:
 			chartStr = f"Chart Name: {self.output["song_name"]}" + f" ({self.output["playback_speed"]}%)\n" if self.output["playback_speed"] != 100 else '\n'
 			chartStr += f"Run Time: <t:{int(round(datetime.strptime(self.output["score_timestamp"], '%Y-%m-%dT%H:%M:%S.%fZ').timestamp()))}:f>\n"
 			chartStr += f"Game Version: {self.output['game_version']}"
 			embed.add_field(name="Submission Stats", value=chartStr, inline=False)
+			embed.set_footer(text=f"Chart md5 {self.output['checksum']}")
 			plySteg = self.output['players']
 		else:
 			plySteg = self.output
