@@ -1,4 +1,4 @@
-import json, base64, io, os
+import json, base64, io, os, uuid
 
 import discord
 import pytz
@@ -237,8 +237,8 @@ class QualifierCmds(commands.Cog):
 		self.bot = bot
 
 	@commands.slash_command(name='qualifier', description='Submit a qualifier score for a tournament/bracket', integration_types={discord.IntegrationType.guild_install})
-	#@discord.option("submission", discord.Attachment, description="Attach in-game screenshot of qualifer run", required=True)
-	async def qualifierSubmitCmd(self, ctx):#, submission: discord.Attachment):
+	async def qualifierSubmitCmd(self, ctx):
+		print(f"User {self.ctx.user.display_name} is ")
 		view = DiscordQualifierView(ctx)
 		await view.init()
 

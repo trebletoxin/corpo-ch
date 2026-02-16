@@ -16,9 +16,7 @@ logger = logging.getLogger(__name__)
 
 @tasks.loop()
 async def run_tasks(bot: Bot):
-	print("TASK!")
 	django.db.close_old_connections()
-
 	if len(bot.tasks) > 0:
 		task, args, kwargs = bot.tasks.pop(0)
 		requeue_task = False
@@ -41,8 +39,10 @@ async def run_tasks(bot: Bot):
 		run_tasks.stop()
 	django.db.close_old_connections()
 
-async def run_task_function(bot, function, task_args, task_kwargs):
-	mod_name, func_name = function.rsplit('.',1)
-	mod = importlib.import_module(mod_name)
-	func = getattr(mod, func_name)
-	await func(bot, *task_args, **task_kwargs)
+async def set_group_role(bot, user_id, guild_id, role_id):
+    logger.debug(f"Setting Group role {role_id} discord ID {user_id}")
+
+    guild = bot.get_guild(guild_id)
+    user = await guild.fetch_member(user_id)
+    role = await guild.fetch_role(role_id)
+    await user.add_roles(role)

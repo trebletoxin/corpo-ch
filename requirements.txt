@@ -1,10 +1,10 @@
+py-cord
 asgiref
 sqlparse
 Django
 dotenv
 python-decouple
 mysqlclient
-requests
 celery
 django-multiselectfield
 django-encrypted-json-fields

@@ -7,6 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from corpoch.models import Chart, Tournament, TournamentConfig, TournamentBracket, Qualifier, TournamentPlayer, GroupSeed, MatchRound
 from corpoch.models import TournamentMatchCompleted, TournamentMatchOngoing, BracketGroup, QualifierSubmission, CH_MODIFIERS, MatchBan, GSheetAPI
 from corpoch.providers import EncoreClient
+import corpoch.dbot.tasks
 
 @admin.register(GSheetAPI)
 class GSheetAPIAdmin(admin.ModelAdmin):
@@ -15,7 +16,7 @@ class GSheetAPIAdmin(admin.ModelAdmin):
 @admin.register(Chart)
 class ChartAdmin(admin.ModelAdmin):
 	list_display = ('name',  '_bracket', 'charter', 'artist', 'album', 'speed', '_modifiers', 'tiebreaker')
-	list_filter = ['bracket', 'charter', 'artist', 'tiebreaker']
+	list_filter = ['brackets', 'charter', 'artist', 'tiebreaker']
 	actions = ['run_encore_import']
 
 	def _bracket(self,obj):
@@ -89,13 +90,10 @@ class SeedingInline(SortableStackedInline):
 
 @admin.register(BracketGroup)
 class BracketGroupAdmin(SortableAdminBase, admin.ModelAdmin):
-	list_display = ('name', 'tournament', 'bracket_name', 'group_players')
-	#list_display_links = ("_group_name", "_player_name",)
+	list_display = ('name', 'tournament', 'bracket_name')#, 'group_players')
 	inlines = [SeedingInline]
-	#ordering = ['seed']
 	list_per_page = 32
-
-	## TODO: Add task akin to encore chart import for tourney charts to create+assign group roles
+	actions = ['set_group_role']
 
 	def tournament(self, obj):
 		return obj.bracket.tournament.short_name
@@ -111,9 +109,22 @@ class BracketGroupAdmin(SortableAdminBase, admin.ModelAdmin):
 				 kwargs["queryset"] = Tournament.players.objects.all()
 		 return super(BracketGroupAdmin, self).formfield_for_foreignkey(db_field, request, **kwargs)
 
+	@admin.action(description="Set group role for players")
+	def set_group_role(modeladmin, request, queryset):
+		for group in queryset:
+			tourney = group.bracket.tournament
+			role = group.role
+			guild = tourney.guild
+			for seed in group.seeding.all():
+				ply = seed.player.user
+				corpoch.dbot.tasks.set_group_role(ply, guild, role)
+
 @admin.register(QualifierSubmission)
 class QualifierSubmission(admin.ModelAdmin):
 	list_display = ('id', 'qualifier', 'player_ch_name')
+
+	def tournament(self, obj):
+		return obj.qualifier.tournament.short_name
 
 	def player_ch_name(self, obj):
 		return obj.player.ch_name
@@ -143,7 +154,7 @@ class TournamentMatchCompletedAdmin(SortableAdminBase, admin.ModelAdmin):
 	list_display = ('__str__', 'processed', 'bracket_name', 'group', '_match_players', 'started_on', 'version')
 	inlines = [BansCompletedInline, RoundsCompletedInline]
 	list_per_page = 16
-	exclyde = ['ongoing_match']
+	exclude = ['ongoing_match']
 
 	def bracket_name(self, obj):
 		return obj.group.bracket.name
