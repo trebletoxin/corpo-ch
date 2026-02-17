@@ -1,5 +1,6 @@
 import typing, requests_cache, json, io, hashlib, re, gspread, asyncio, discord, os, uuid, platform, subprocess, pytesseract
 from datetime import datetime
+from typing import Union
 from random import randbytes
 from PIL import Image, ImageEnhance
 from django.db import models
@@ -9,16 +10,18 @@ from corpoch import settings
 from corpoch.models import GSheetAPI, Chart, Tournament, TournamentMatchCompleted, TournamentMatchOngoing, Qualifier, QualifierSubmission
 
 class SNGHandler:
-	def __init__(self, chartFolder: os.path=None, sngData: bytes=None, playlist: str=None):
-		if chartFolder is None and sngData is None:
-			raise ValueError("chartFolder or sngData must be provided")
+	def __init__(self, submission: Union[str,bytes], playlist: str=None):
+		if not ((isinstance(submission, bytes) and submission[:6].decode('utf-8') == "SNGPKG") or 
+			(os.path.isfile(os.path.join(submission,"song.ini")) and 
+			(os.path.isfile(os.path.join(submission,"notes.chart")) or os.path.isfile(os.path.join(submission,"notes.mid"))))):
+			raise TypeError("Submission must be a directory of a single chart or the bytes of an .sng")
 		self._playlist = playlist
 		
-		if sngData is not None:
-			self._files = self.get_sng_files(sngData)
+		if isinstance(submission, bytes):
+			self._files = self.get_sng_files(submission)
 		else:
 			results = []
-			files = os.listdir(chartFolder)
+			files = os.listdir(submission)
 			
 			valid_picture_names = ("album.","background.","highway.")
 			valid_picture_extensions = ("png","jpg","jpeg")
@@ -35,12 +38,30 @@ class SNGHandler:
 					(file.lower().startswith(valid_video_names) and file.lower().endswith(valid_video_extensions)) or
 					(file.lower() in valid_notes) or
 					(file.lower() == valid_songini)):
-					with open(os.path.join(chartFolder,file), 'rb') as f:
+					with open(os.path.join(submission,file), 'rb') as f:
 						file_bytes = f.read()
 						results.append([file.lower(), file_bytes])
 			self._files = results
 
-	def parse_metadataPairArray(self, data: bytes) -> list[str, str]:
+	@property
+	def songini(self) -> bytes:
+		for row in self._files:
+			filename = row[0]
+			if "song.ini" in filename:
+				return row[1]
+
+	@property
+	def chart(self) -> bytes:
+		for row in self._files:
+			filename = row[0]
+			if "notes.chart" in filename or "notes.mid" in filename:
+				return row[1]
+
+	@property
+	def md5(self) -> str:
+		return hashlib.md5(self.chart).hexdigest()
+
+	def parse_metadataPairArray(self, data: bytes) -> list[list[str, str]]:
 		results = []
 		byte_stream = io.BytesIO(data)
 		while True:
@@ -61,7 +82,7 @@ class SNGHandler:
 			results.append([key, value])
 		return results
 
-	def parse_fileMetaArray(self, data: bytes) -> list[str, int, int]:
+	def parse_fileMetaArray(self, data: bytes) -> list[list[str, int, int]]:
 		results = []
 		byte_stream = io.BytesIO(data)
 		while True:
@@ -82,7 +103,7 @@ class SNGHandler:
 			results.append([filename, contentsLen, contentsIndex])
 		return results
 			
-	def unmaskFileByteArray(self, dataArray: list[int], xorMask:list[int]) -> list[int]:
+	def xorMask(self, dataArray: list[int], xorMask:list[int]) -> list[int]:
 		unmasked_file_bytes = [None] * len(dataArray)
 		for i in range(len(dataArray)):
 			xorKey = xorMask[i % 16] ^ (i % 256)
@@ -90,7 +111,7 @@ class SNGHandler:
 		return unmasked_file_bytes
 
 	#Meant to be fed in raw content - this may be able to be improved?
-	def get_sng_files(self, all_bytes: bytes) -> list[str, bytes]:
+	def get_sng_files(self, all_bytes: bytes) -> list[list[str, bytes]]:
 		all_bytes_stream = io.BytesIO(all_bytes)
 		all_bytes_stream.seek(10)
 		
@@ -118,30 +139,14 @@ class SNGHandler:
 			songini_stream.write(bytes(f"[song]\n".encode('utf-8')))
 			for row in metadataPairArray:
 				line = f"{row[0]} = {row[1]}\n"
-				line_bytes = bytes(line.encode('utf-8'))
-				songini_bytes = songini_stream.write(line_bytes)
-			results.append(["song.ini", line_bytes])
+				songini_stream.write(line.encode('utf-8')
+			results.append(["song.ini", songini_stream.getvalue()])
 			
 		for row in fileMetaArray:
 			all_bytes_stream.seek(row[2])
-			results.append([row[0],bytes(self.unmaskFileByteArray(list(all_bytes_stream.read(row[1])),xorMask))])
+			results.append([row[0],bytes(self.xorMask(list(all_bytes_stream.read(row[1])),xorMask))])
 			
 		return results
-
-	def get_chart_data(self) -> bytes:
-		for row in self._files:
-			filename = row[0]
-			if "notes.chart" in filename or "notes.mid" in filename:
-				return row[1]
-
-	def get_song_ini(self) -> bytes: #Quick hack to make this work
-		for row in self._files:
-			filename = row[0]
-			if "song.ini" in filename:
-				return row[1]
-	
-	def get_md5(self) -> str:
-		return hashlib.md5(self.get_chart_data()).hexdigest()
 	
 	def build_sng(self) -> bytes:
 		with io.BytesIO() as sng_stream:
@@ -189,8 +194,7 @@ class SNGHandler:
 				metadataCount = len(metadataPairArray).to_bytes(8, byteorder='little',signed=False)
 				sng_stream.write(metadataLen)
 				sng_stream.write(metadataCount)
-				songini_stream.seek(0)
-				sng_stream.write(songini_stream.read())
+				sng_stream.write(songini_stream.getvalue())
 			
 			fileCount = len(self._files)-1
 			fileMetaLen = 8 + (17)*fileCount
@@ -217,8 +221,7 @@ class SNGHandler:
 					fileMeta_stream.write(contentsIndex)
 					fileDataArray_Array.append([row[0], len(row[1]), fileDataArray_index])
 					fileDataArray_index += len(row[1])
-				fileMeta_stream.seek(0)
-				sng_stream.write(fileMeta_stream.read())
+				sng_stream.write(fileMeta_stream.getvalue())
 			
 			fileDataLen = 0
 			for row in fileDataArray_Array:
@@ -228,10 +231,9 @@ class SNGHandler:
 			for row in self._files:
 				if "song.ini" == row[0].lower():
 					continue
-				sng_stream.write(bytes(self.unmaskFileByteArray(list(row[1]),xorMask)))
+				sng_stream.write(bytes(self.xorMask(list(row[1]),xorMask)))
 
-			sng_stream.seek(0)
-			return sng_stream.read()
+			return sng_stream.getvalue()
 
 class EncoreClient:
 	def __init__(self, limit: int=24, exact: bool=True):
@@ -295,10 +297,10 @@ class EncoreClient:
 		return self._session.get(url).content
 
 	def get_md5_from_chart(self, chart) -> str:
-		return SNGHandler(sngData=self.download_from_chart(chart)).get_md5()
+		return SNGHandler(self.download_from_chart(chart)).md5
 
 	def get_md5_from_url(self, url) -> str:
-		return SNGHandler(sngData=self.download_from_url(url)).get_md5()
+		return SNGHandler(self.download_from_url(url)).md5
 
 class CHOpt:
 	def __init__(self):
@@ -353,8 +355,8 @@ class CHOpt:
 			print("gen_path called incorrectly, chart not type Chart or encore chart dict")
 			return None
 
-		sng = SNGHandler(sngData=content)
-		chartFile = self._prep_chart(sng.get_chart_data(), sng.get_song_ini())
+		sng = SNGHandler(content)
+		chartFile = self._prep_chart(sng.chart, sng.songini)
 		
 		outPng = f"{self._output}/{self._file_id}.png"
 		print(f"CHOPT: Output PNG: {outPng}")
