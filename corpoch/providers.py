@@ -423,15 +423,11 @@ class CHStegTool:
 		stegCall = f"{self._steg} --json {self.img_path}"
 		try:
 			proc = subprocess.run(stegCall.split(), stdout = subprocess.PIPE, stderr = subprocess.PIPE)
-			print(f"PROC: {proc}")
 			err = proc.stderr.decode('utf-8')
 			if proc.returncode == 0 or proc.returncode == '0':
-				print("Success")
 				self.output = self._sanitize_steg(proc)
 				if self.output['game_version'] in "v1.0.0.4080-final":
-					print("Running 1.0.0-4080 fixes")
 					self._get_over_strums()
-
 				for i, player in enumerate(self.output['players']):
 					player["notes_missed"] = player["total_notes"] - player['notes_hit']
 			elif err == 'Error: InvalidScreenshotData\n':

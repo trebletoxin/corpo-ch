@@ -122,12 +122,18 @@ class BracketGroupAdmin(SortableAdminBase, admin.ModelAdmin):
 @admin.register(QualifierSubmission)
 class QualifierSubmission(admin.ModelAdmin):
 	list_display = ('id', 'qualifier', 'player_ch_name')
-
+	list_filter = ["qualifier", "player"]
 	def tournament(self, obj):
 		return obj.qualifier.tournament.short_name
 
 	def player_ch_name(self, obj):
 		return obj.player.ch_name
+
+	@admin.action(description="Mark Qualifiers GS Unsubmitted")
+	def set_group_role(modeladmin, request, queryset):
+		for quali in queryset:
+			quali.submitted = False
+			quali.save()
 
 class RoundsOngoingInline(SortableStackedInline):
 	model = MatchRound

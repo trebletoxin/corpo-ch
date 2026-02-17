@@ -322,7 +322,7 @@ class CHCmds(commands.Cog):
 			await ctx.respond("Submitted screenshot is not a valid in-game Clone Hero screenshot", delete_after=5)
 			return
 
-		embed = self.steg.buildStatsEmbed("Screenshot Results")
+		embed = steg.buildStatsEmbed("Screenshot Results")
 		if len(msg.attachments) > 1:
 			await ctx.respond("Only getting first screenshot data from this message", embed=embed)
 		else:

@@ -43,10 +43,10 @@ class CorpoDbot(commands.Bot):
 			queues.append(Queue(que))
 		self.message_consumer = Consumer(self.message_connection, queues, callbacks=[self.on_queue_message])#, channel=self.chan)
 		self.tasks = []
-		# cogs
+		# cogs - this needs to move to a settings section
 		cogList = [
 			'chcmds',
-			'tourneycmds',
+			#'tourneycmds',
 			'qualifiercmds',
 			'ownercmds'
 		]
@@ -63,7 +63,6 @@ class CorpoDbot(commands.Bot):
 		print(f"--- Starting up at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())} ---")
 		print('Logging into discord')
 		super().run(os.getenv("BOT_TOKEN"), reconnect=True)
-
 		print(f"--- Shutting down at {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())} ---")
 
 	def on_queue_message(self, body, message):
