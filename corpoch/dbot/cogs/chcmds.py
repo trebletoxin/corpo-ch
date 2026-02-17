@@ -73,7 +73,6 @@ class EncoreModal(discord.ui.Modal):
 
 		await interaction.response.defer(invisible=True)
 		tmp = self.path.encore.search(retData)
-		print(f"Got results {tmp}")
 		self.path.charts = tmp
 		await self.path.show()
 		self.stop()

@@ -139,7 +139,7 @@ class SNGHandler:
 			songini_stream.write(bytes(f"[song]\n".encode('utf-8')))
 			for row in metadataPairArray:
 				line = f"{row[0]} = {row[1]}\n"
-				songini_stream.write(line.encode('utf-8')
+				songini_stream.write(line.encode('utf-8'))
 			results.append(["song.ini", songini_stream.getvalue()])
 			
 		for row in fileMetaArray:
